@@ -7,19 +7,19 @@
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="container">
+    <div class="container fade-in">
         <h1>🌍 Time Zone & Location Finder</h1>
-        <p>Enter Bangladesh time (BST) and the local time of the unknown place.</p>
+        <p class="subtitle">Enter Bangladesh time and the local time of the unknown location.</p>
 
         <label>Bangladesh Standard Time (BST - UTC+6):</label>
-        <input type="time" id="bstTime" required>
+        <input type="time" id="bstTime">
 
         <label>Local Time of Unknown Location:</label>
-        <input type="time" id="localTime" required>
+        <input type="time" id="localTime">
 
         <button onclick="calculate()">Find Time Zone</button>
 
-        <div id="result" class="result"></div>
+        <div id="result" class="result fade-in"></div>
     </div>
 
     <script src="script.js"></script>
