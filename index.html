@@ -1,27 +1,136 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Time Zone Finder</title>
-    <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>River Coordinate Verifier</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container fade-in">
-        <h1>🌍 Time Zone & Location Finder</h1>
-        <p class="subtitle">Enter Bangladesh time and the local time of the unknown location.</p>
 
-        <label>Bangladesh Standard Time (BST - UTC+6):</label>
-        <input type="time" id="bstTime">
+  <!-- ============ HEADER ============ -->
+  <header class="app-header">
+    <h1>River Coordinate Verifier</h1>
+    <p class="subtitle">Paste a GitHub JSON file URL to visualize and verify river coordinate data on an interactive map.</p>
+  </header>
 
-        <label>Local Time of Unknown Location:</label>
-        <input type="time" id="localTime">
+  <!-- ============ INPUT SECTION ============ -->
+  <section class="input-section">
+    <div class="url-input-card card">
+      <label for="urlInput">GitHub JSON File URL</label>
+      <textarea
+        id="urlInput"
+        rows="2"
+        placeholder="https://github.com/user/repo/blob/main/path/to/river.json"
+        spellcheck="false"
+      ></textarea>
 
-        <button onclick="calculate()">Find Time Zone</button>
+      <div class="button-row">
+        <button id="loadBtn" class="btn btn-primary">Load River</button>
+        <button id="clearBtn" class="btn btn-secondary">Clear</button>
+        <button id="zoomBtn" class="btn btn-secondary" disabled>Zoom to River</button>
+      </div>
 
-        <div id="result" class="result fade-in"></div>
+      <p class="hint">Or drag &amp; drop a JSON file anywhere on the page. Ctrl+Enter to load.</p>
+    </div>
+  </section>
+
+  <!-- ============ STATUS BAR ============ -->
+  <section class="status-section">
+    <div id="statusBar" class="status-bar"></div>
+  </section>
+
+  <!-- ============ RIVER INFO PANEL ============ -->
+  <section id="infoPanel" class="info-panel card hidden">
+    <div class="info-grid">
+      <div class="info-item">
+        <span class="info-label">River Name</span>
+        <span id="infoName" class="info-value">&mdash;</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Slug</span>
+        <span id="infoSlug" class="info-value">&mdash;</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Total Points</span>
+        <span id="infoPoints" class="info-value">&mdash;</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Path Length</span>
+        <span id="infoLength" class="info-value">&mdash;</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Bounding Box</span>
+        <span id="infoBbox" class="info-value">&mdash;</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Fetch Time</span>
+        <span id="infoFetchTime" class="info-value">&mdash;</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Render Time</span>
+        <span id="infoRenderTime" class="info-value">&mdash;</span>
+      </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- Extra tools -->
+    <div class="tools-row">
+      <label class="toggle-label">
+        <input type="checkbox" id="toggleMarkers" checked>
+        <span>Show Start/End Markers</span>
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="togglePointNumbers">
+        <span>Show Point Numbers</span>
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="toggleDarkMode">
+        <span>Dark Mode</span>
+      </label>
+      <button id="copyStatsBtn" class="btn btn-small btn-secondary">Copy Stats</button>
+      <button id="exportPngBtn" class="btn btn-small btn-secondary">Export PNG</button>
+    </div>
+  </section>
+
+  <!-- ============ COORDINATE INSPECTOR POPUP ============ -->
+  <div id="coordInspector" class="coord-inspector hidden">
+    <div class="coord-inspector-header">Coordinate Inspector</div>
+    <div id="coordInspectorContent">
+      <div><span class="ci-label">Point Index:</span> <span id="ciIndex">&mdash;</span></div>
+      <div><span class="ci-label">Latitude:</span> <span id="ciLat">&mdash;</span></div>
+      <div><span class="ci-label">Longitude:</span> <span id="ciLng">&mdash;</span></div>
+    </div>
+  </div>
+
+  <!-- ============ MAP ============ -->
+  <div id="map" class="map-container"></div>
+
+  <!-- ============ HOVER COORDINATES ============ -->
+  <div id="hoverCoords" class="hover-coords hidden">
+    <span id="hoverLat"></span>, <span id="hoverLng"></span>
+  </div>
+
+  <!-- ============ DRAG & DROP OVERLAY ============ -->
+  <div id="dropOverlay" class="drop-overlay hidden">
+    <div class="drop-overlay-text">Drop JSON file here</div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+
+  <!-- html2canvas for PNG export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <!-- Custom JS -->
+  <script src="script.js"></script>
 </body>
 </html>
