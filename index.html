@@ -13,16 +13,18 @@
 </head>
 <body>
 
-  <!-- ============ HEADER ============ -->
-  <header class="app-header">
-    <h1>River Coordinate Verifier</h1>
-    <p class="subtitle">Paste a GitHub JSON file URL to visualize and verify river coordinate data on an interactive map.</p>
-  </header>
+  <!-- ============ SIDEBAR DRAWER ============ -->
+  <aside id="sidebar" class="sidebar">
 
-  <!-- ============ INPUT SECTION ============ -->
-  <section class="input-section">
-    <div class="url-input-card card">
-      <label for="urlInput">GitHub JSON File URL</label>
+    <!-- Sidebar header / toggle target -->
+    <div class="sidebar-header">
+      <h1 class="sidebar-title">River Verifier</h1>
+      <button id="closeSidebarBtn" class="sidebar-close" title="Collapse panel">&times;</button>
+    </div>
+
+    <!-- URL Input -->
+    <div class="sidebar-section">
+      <label for="urlInput">GitHub JSON URL</label>
       <textarea
         id="urlInput"
         rows="2"
@@ -31,80 +33,77 @@
       ></textarea>
 
       <div class="button-row">
-        <button id="loadBtn" class="btn btn-primary">Load River</button>
+        <button id="loadBtn" class="btn btn-primary">Load</button>
         <button id="clearBtn" class="btn btn-secondary">Clear</button>
-        <button id="zoomBtn" class="btn btn-secondary" disabled>Zoom to River</button>
       </div>
 
-      <p class="hint">Or drag &amp; drop a JSON file anywhere on the page. Ctrl+Enter to load.</p>
+      <p class="hint">Drag &amp; drop JSON or press Ctrl+Enter</p>
     </div>
-  </section>
 
-  <!-- ============ STATUS BAR ============ -->
-  <section class="status-section">
+    <!-- Status -->
     <div id="statusBar" class="status-bar"></div>
-  </section>
 
-  <!-- ============ RIVER INFO PANEL ============ -->
-  <section id="infoPanel" class="info-panel card hidden">
-    <div class="info-grid">
-      <div class="info-item">
-        <span class="info-label">River Name</span>
-        <span id="infoName" class="info-value">&mdash;</span>
+    <!-- Info Panel (verification stats only) -->
+    <div id="infoPanel" class="info-panel hidden">
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">Points</span>
+          <span id="infoPoints" class="info-value">&mdash;</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Length</span>
+          <span id="infoLength" class="info-value">&mdash;</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Fetch</span>
+          <span id="infoFetchTime" class="info-value">&mdash;</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Render</span>
+          <span id="infoRenderTime" class="info-value">&mdash;</span>
+        </div>
       </div>
-      <div class="info-item">
-        <span class="info-label">Slug</span>
-        <span id="infoSlug" class="info-value">&mdash;</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Total Points</span>
-        <span id="infoPoints" class="info-value">&mdash;</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Path Length</span>
-        <span id="infoLength" class="info-value">&mdash;</span>
-      </div>
-      <div class="info-item">
+
+      <div class="info-item info-bbox-item">
         <span class="info-label">Bounding Box</span>
-        <span id="infoBbox" class="info-value">&mdash;</span>
+        <span id="infoBbox" class="info-value info-value-mono">&mdash;</span>
       </div>
-      <div class="info-item">
-        <span class="info-label">Fetch Time</span>
-        <span id="infoFetchTime" class="info-value">&mdash;</span>
+
+      <div class="tools-row">
+        <button id="zoomBtn" class="btn btn-small btn-secondary" disabled>Zoom to Fit</button>
+        <label class="toggle-label">
+          <input type="checkbox" id="toggleMarkers" checked>
+          <span>Markers</span>
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="togglePointNumbers">
+          <span>Point #s</span>
+        </label>
       </div>
-      <div class="info-item">
-        <span class="info-label">Render Time</span>
-        <span id="infoRenderTime" class="info-value">&mdash;</span>
+
+      <div class="tools-row tools-row-alt">
+        <label class="toggle-label">
+          <input type="checkbox" id="toggleDarkMode">
+          <span>Dark Mode</span>
+        </label>
+        <button id="copyStatsBtn" class="btn btn-small btn-secondary">Copy Stats</button>
+        <button id="exportPngBtn" class="btn btn-small btn-secondary">Export PNG</button>
       </div>
     </div>
 
-    <!-- Extra tools -->
-    <div class="tools-row">
-      <label class="toggle-label">
-        <input type="checkbox" id="toggleMarkers" checked>
-        <span>Show Start/End Markers</span>
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="togglePointNumbers">
-        <span>Show Point Numbers</span>
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="toggleDarkMode">
-        <span>Dark Mode</span>
-      </label>
-      <button id="copyStatsBtn" class="btn btn-small btn-secondary">Copy Stats</button>
-      <button id="exportPngBtn" class="btn btn-small btn-secondary">Export PNG</button>
-    </div>
-  </section>
+  </aside>
 
-  <!-- ============ COORDINATE INSPECTOR POPUP ============ -->
+  <!-- ============ OPEN SIDEBAR BUTTON (shown when collapsed) ============ -->
+  <button id="openSidebarBtn" class="sidebar-open-btn hidden" title="Open panel">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+
+  <!-- ============ COORDINATE INSPECTOR ============ -->
   <div id="coordInspector" class="coord-inspector hidden">
-    <div class="coord-inspector-header">Coordinate Inspector</div>
-    <div id="coordInspectorContent">
-      <div><span class="ci-label">Point Index:</span> <span id="ciIndex">&mdash;</span></div>
-      <div><span class="ci-label">Latitude:</span> <span id="ciLat">&mdash;</span></div>
-      <div><span class="ci-label">Longitude:</span> <span id="ciLng">&mdash;</span></div>
-    </div>
+    <div class="coord-inspector-header">Inspector</div>
+    <div><span class="ci-label">Index:</span> <span id="ciIndex">&mdash;</span></div>
+    <div><span class="ci-label">Lat:</span> <span id="ciLat">&mdash;</span></div>
+    <div><span class="ci-label">Lng:</span> <span id="ciLng">&mdash;</span></div>
   </div>
 
   <!-- ============ MAP ============ -->
