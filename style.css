@@ -37,30 +37,13 @@ body.dark-mode {
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-body.dark-mode .status-bar.status-error {
-  background: #7f1d1d;
-  color: #fca5a5;
-}
-body.dark-mode .status-bar.status-success {
-  background: #14532d;
-  color: #86efac;
-}
-body.dark-mode .status-bar.status-info {
-  background: #1e3a5f;
-  color: #93c5fd;
-}
+body.dark-mode .status-bar.status-error { background: #7f1d1d; color: #fca5a5; }
+body.dark-mode .status-bar.status-success { background: #14532d; color: #86efac; }
+body.dark-mode .status-bar.status-info { background: #1e3a5f; color: #93c5fd; }
 
 /* ---------- Reset & Base ---------- */
-*, *::before, *::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body {
-  height: 100%;
-  overflow: hidden;
-}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
 
 body {
   font-family: var(--font-sans);
@@ -86,18 +69,21 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   z-index: 800;
-  transition: margin-left var(--sidebar-transition), opacity var(--sidebar-transition);
   flex-shrink: 0;
+  transition: width var(--sidebar-transition),
+              min-width var(--sidebar-transition),
+              opacity var(--sidebar-transition);
 }
 
-/* Collapsed state */
 .sidebar.collapsed {
-  margin-left: calc(-1 * var(--sidebar-w));
+  width: 0;
+  min-width: 0;
   opacity: 0;
-  pointer-events: none;
+  overflow: hidden;
+  border-right: none;
 }
 
-/* Sidebar header */
+/* Header */
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -105,6 +91,7 @@ body {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .sidebar-title {
@@ -121,25 +108,22 @@ body {
   line-height: 1;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0 0.2rem;
+  padding: 0 0.3rem;
   border-radius: 4px;
+  flex-shrink: 0;
   transition: color 0.15s, background 0.15s;
 }
+.sidebar-close:hover { color: var(--text); background: var(--border); }
 
-.sidebar-close:hover {
-  color: var(--text);
-  background: var(--border);
-}
-
-/* Open button (floating, shown when sidebar collapsed) */
+/* Open button (fixed overlay, outside flex flow) */
 .sidebar-open-btn {
   position: fixed;
   top: 10px;
   left: 10px;
-  z-index: 900;
+  z-index: 1001;
   width: 36px;
   height: 36px;
-  display: flex;
+  display: none; /* hidden by default; shown via .visible */
   align-items: center;
   justify-content: center;
   background: var(--bg-card);
@@ -150,19 +134,14 @@ body {
   color: var(--text);
   transition: background 0.2s, color 0.2s;
 }
+.sidebar-open-btn.visible { display: flex; }
+.sidebar-open-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-.sidebar-open-btn:hover {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-/* Sidebar sections */
+/* Sections */
 .sidebar-section {
   padding: 0.85rem 1rem;
   flex-shrink: 0;
 }
-
 .sidebar-section label {
   display: block;
   font-weight: 600;
@@ -172,7 +151,6 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-
 .sidebar-section textarea {
   width: 100%;
   padding: 0.5rem 0.65rem;
@@ -185,25 +163,15 @@ body {
   resize: vertical;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
 .sidebar-section textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-light);
 }
-
-.hint {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-top: 0.5rem;
-}
+.hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.5rem; }
 
 /* ---------- Buttons ---------- */
-.button-row {
-  display: flex;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-}
+.button-row { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
 
 .btn {
   display: inline-flex;
@@ -219,27 +187,13 @@ body {
   transition: background 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
   white-space: nowrap;
 }
-
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  flex: 1;
-}
+.btn-primary { background: var(--accent); color: #fff; flex: 1; }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-
-.btn-secondary {
-  background: var(--border);
-  color: var(--text);
-}
+.btn-secondary { background: var(--border); color: var(--text); }
 .btn-secondary:hover:not(:disabled) { opacity: 0.8; }
-
-.btn-small {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.72rem;
-}
+.btn-small { padding: 0.3rem 0.6rem; font-size: 0.72rem; }
 
 /* ---------- Status Bar ---------- */
 .status-bar {
@@ -251,102 +205,28 @@ body {
   flex-shrink: 0;
   transition: all 0.2s ease;
 }
-
-.status-bar.status-error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-}
-.status-bar.status-success {
-  background: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
-}
-.status-bar.status-info {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
-}
-.status-bar:empty {
-  padding: 0;
-  margin: 0 1rem;
-  min-height: 0;
-  border: none;
-}
+.status-bar.status-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.status-bar.status-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.status-bar.status-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.status-bar:empty { padding: 0; margin: 0 1rem; min-height: 0; border: none; }
 
 /* ---------- Info Panel ---------- */
-.info-panel {
-  padding: 0 1rem 1rem;
-  flex-shrink: 0;
-}
+.info-panel { padding: 0 1rem 1rem; flex-shrink: 0; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.info-item { display: flex; flex-direction: column; gap: 0.05rem; }
+.info-bbox-item { margin-top: 0.3rem; }
+.info-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.info-value { font-size: 0.82rem; font-weight: 600; color: var(--text); word-break: break-all; }
+.info-value-mono { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500; }
 
-.info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.05rem;
-}
-
-.info-bbox-item {
-  margin-top: 0.3rem;
-}
-
-.info-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-}
-
-.info-value {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text);
-  word-break: break-all;
-}
-
-.info-value-mono {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 500;
-}
-
-.tools-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
-  flex-wrap: wrap;
-}
-
-.tools-row-alt {
-  margin-top: 0;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border);
-}
+.tools-row { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.6rem; flex-wrap: wrap; }
+.tools-row-alt { margin-top: 0; padding-top: 0.5rem; border-top: 1px solid var(--border); }
 
 .toggle-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  cursor: pointer;
-  color: var(--text);
-  user-select: none;
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  font-size: 0.75rem; cursor: pointer; color: var(--text); user-select: none;
 }
-
-.toggle-label input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
+.toggle-label input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
 
 /* =============================================
    MAP
@@ -354,131 +234,67 @@ body {
 
 .map-container {
   flex: 1;
-  min-width: 0; /* allow flex shrink */
+  min-width: 0;
 }
 
 /* ---------- Coordinate Inspector ---------- */
 .coord-inspector {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 1000;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-md);
-  padding: 0.5rem 0.7rem;
-  font-size: 0.78rem;
-  min-width: 160px;
+  position: fixed; top: 10px; right: 10px; z-index: 1000;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+  padding: 0.5rem 0.7rem; font-size: 0.78rem; min-width: 160px;
   transition: background 0.3s ease, border-color 0.3s ease;
 }
-
 .coord-inspector-header {
-  font-weight: 700;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--accent);
-  margin-bottom: 0.2rem;
+  font-weight: 700; font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--accent); margin-bottom: 0.2rem;
 }
-
-.ci-label {
-  color: var(--text-muted);
-  font-weight: 500;
-}
+.ci-label { color: var(--text-muted); font-weight: 500; }
 
 /* ---------- Hover Coordinates ---------- */
 .hover-coords {
-  position: fixed;
-  bottom: 12px;
-  right: 12px;
-  z-index: 1000;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
-  padding: 0.3rem 0.55rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  pointer-events: none;
+  position: fixed; bottom: 12px; right: 12px; z-index: 1000;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow);
+  padding: 0.3rem 0.55rem; font-family: var(--font-mono);
+  font-size: 0.72rem; color: var(--text-muted); pointer-events: none;
   transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 /* ---------- Drag & Drop Overlay ---------- */
 .drop-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
+  position: fixed; inset: 0; z-index: 2000;
   background: rgba(37, 99, 235, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(2px);
 }
-
 .drop-overlay-text {
-  background: var(--accent);
-  color: #fff;
-  padding: 1rem 2rem;
-  border-radius: var(--radius);
-  font-size: 1.1rem;
-  font-weight: 700;
-  box-shadow: var(--shadow-md);
+  background: var(--accent); color: #fff;
+  padding: 1rem 2rem; border-radius: var(--radius);
+  font-size: 1.1rem; font-weight: 700; box-shadow: var(--shadow-md);
 }
 
 /* ---------- Utility ---------- */
-.hidden {
-  display: none !important;
-}
+.hidden { display: none !important; }
 
 /* ---------- Leaflet popup tweaks ---------- */
-.leaflet-popup-content-wrapper {
-  border-radius: var(--radius-sm) !important;
-  font-family: var(--font-sans) !important;
-  font-size: 0.82rem !important;
-}
-.leaflet-popup-tip {
-  box-shadow: none !important;
-}
+.leaflet-popup-content-wrapper { border-radius: var(--radius-sm) !important; font-family: var(--font-sans) !important; font-size: 0.82rem !important; }
+.leaflet-popup-tip { box-shadow: none !important; }
 
 /* Point number markers */
 .point-number-marker {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  font-family: var(--font-sans);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  text-align: center;
-  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700; font-family: var(--font-sans);
+  border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  text-align: center; line-height: 1;
 }
+body.dark-mode .point-number-marker { border-color: #374151; }
 
-body.dark-mode .point-number-marker {
-  border-color: #374151;
-}
-
-/* ---------- Responsive (mobile: sidebar becomes overlay) ---------- */
+/* ---------- Responsive ---------- */
 @media (max-width: 640px) {
-  :root {
-    --sidebar-w: 280px;
-  }
-
-  .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    box-shadow: var(--shadow-md);
-  }
-
-  .sidebar.collapsed {
-    margin-left: calc(-1 * var(--sidebar-w));
-  }
+  :root { --sidebar-w: 280px; }
+  .sidebar { position: fixed; left: 0; top: 0; box-shadow: var(--shadow-md); }
+  .sidebar.collapsed { width: 0; min-width: 0; }
 }

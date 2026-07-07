@@ -1,53 +1,58 @@
 /* ============================================
    River Coordinate Verifier — script.js
    Pure vanilla JS, no frameworks
+
+   Coordinate format: QGIS exports [longitude, latitude].
+   Paths format: array of segments, each segment is an
+   array of [lng, lat] coordinate pairs.
    ============================================ */
 
 (function () {
   'use strict';
 
   // ─── State ──────────────────────────────────────────────
-  let map = null;
-  let riverPolyline = null;
-  let startMarker = null;
-  let endMarker = null;
-  let pointNumberMarkers = [];
-  let currentPaths = [];       // Stored as [lat, lng] after swap
-  let currentRiverData = null;
-  let leafletLatLngs = [];
+  var map = null;
+  var riverPolylines = [];     // One L.Polyline per segment
+  var startMarker = null;
+  var endMarker = null;
+  var pointNumberMarkers = [];
+  var allPaths = [];           // Flat array of [lat, lng] across all segments
+  var segmentCount = 0;
+  var currentRiverData = null;
 
   // ─── DOM References ─────────────────────────────────────
-  const urlInput         = document.getElementById('urlInput');
-  const loadBtn          = document.getElementById('loadBtn');
-  const clearBtn         = document.getElementById('clearBtn');
-  const zoomBtn          = document.getElementById('zoomBtn');
-  const statusBar        = document.getElementById('statusBar');
-  const infoPanel        = document.getElementById('infoPanel');
-  const infoPoints       = document.getElementById('infoPoints');
-  const infoLength       = document.getElementById('infoLength');
-  const infoBbox         = document.getElementById('infoBbox');
-  const infoFetchTime    = document.getElementById('infoFetchTime');
-  const infoRenderTime   = document.getElementById('infoRenderTime');
-  const toggleMarkersCb  = document.getElementById('toggleMarkers');
-  const togglePointNums  = document.getElementById('togglePointNumbers');
-  const toggleDarkMode   = document.getElementById('toggleDarkMode');
-  const copyStatsBtn     = document.getElementById('copyStatsBtn');
-  const exportPngBtn     = document.getElementById('exportPngBtn');
-  const coordInspector   = document.getElementById('coordInspector');
-  const ciIndex          = document.getElementById('ciIndex');
-  const ciLat            = document.getElementById('ciLat');
-  const ciLng            = document.getElementById('ciLng');
-  const hoverCoords      = document.getElementById('hoverCoords');
-  const hoverLat         = document.getElementById('hoverLat');
-  const hoverLng         = document.getElementById('hoverLng');
-  const dropOverlay      = document.getElementById('dropOverlay');
-  const sidebar          = document.getElementById('sidebar');
-  const closeSidebarBtn  = document.getElementById('closeSidebarBtn');
-  const openSidebarBtn   = document.getElementById('openSidebarBtn');
+  var urlInput         = document.getElementById('urlInput');
+  var loadBtn          = document.getElementById('loadBtn');
+  var clearBtn         = document.getElementById('clearBtn');
+  var zoomBtn          = document.getElementById('zoomBtn');
+  var statusBar        = document.getElementById('statusBar');
+  var infoPanel        = document.getElementById('infoPanel');
+  var infoPoints       = document.getElementById('infoPoints');
+  var infoSegments     = document.getElementById('infoSegments');
+  var infoLength       = document.getElementById('infoLength');
+  var infoBbox         = document.getElementById('infoBbox');
+  var infoFetchTime    = document.getElementById('infoFetchTime');
+  var infoRenderTime   = document.getElementById('infoRenderTime');
+  var toggleMarkersCb  = document.getElementById('toggleMarkers');
+  var togglePointNums  = document.getElementById('togglePointNumbers');
+  var toggleDarkMode   = document.getElementById('toggleDarkMode');
+  var copyStatsBtn     = document.getElementById('copyStatsBtn');
+  var exportPngBtn     = document.getElementById('exportPngBtn');
+  var coordInspector   = document.getElementById('coordInspector');
+  var ciIndex          = document.getElementById('ciIndex');
+  var ciLat            = document.getElementById('ciLat');
+  var ciLng            = document.getElementById('ciLng');
+  var hoverCoords      = document.getElementById('hoverCoords');
+  var hoverLat         = document.getElementById('hoverLat');
+  var hoverLng         = document.getElementById('hoverLng');
+  var dropOverlay      = document.getElementById('dropOverlay');
+  var sidebar          = document.getElementById('sidebar');
+  var closeSidebarBtn  = document.getElementById('closeSidebarBtn');
+  var openSidebarBtn   = document.getElementById('openSidebarBtn');
 
   // ─── Constants ──────────────────────────────────────────
-  const POINT_NUMBER_INTERVAL = 100;
-  const STORAGE_KEY = 'riverVerifier_lastUrl';
+  var POINT_NUMBER_INTERVAL = 100;
+  var STORAGE_KEY = 'riverVerifier_lastUrl';
 
   // ═════════════════════════════════════════════════════════
   //  INITIALIZATION
@@ -84,15 +89,14 @@
 
   function collapseSidebar() {
     sidebar.classList.add('collapsed');
-    openSidebarBtn.classList.remove('hidden');
-    // Let Leaflet know the container size changed
+    openSidebarBtn.classList.add('visible');
     setTimeout(function () { map.invalidateSize(); }, 350);
     try { localStorage.setItem('riverVerifier_sidebar', 'closed'); } catch (_) {}
   }
 
   function expandSidebar() {
     sidebar.classList.remove('collapsed');
-    openSidebarBtn.classList.add('hidden');
+    openSidebarBtn.classList.remove('visible');
     setTimeout(function () { map.invalidateSize(); }, 350);
     try { localStorage.setItem('riverVerifier_sidebar', 'open'); } catch (_) {}
   }
@@ -101,8 +105,7 @@
     try {
       if (localStorage.getItem('riverVerifier_sidebar') === 'closed') {
         sidebar.classList.add('collapsed');
-        openSidebarBtn.classList.remove('hidden');
-        // Delay map size fix until after first render
+        openSidebarBtn.classList.add('visible');
         setTimeout(function () { map.invalidateSize(); }, 400);
       }
     } catch (_) {}
@@ -124,7 +127,6 @@
     closeSidebarBtn.addEventListener('click', collapseSidebar);
     openSidebarBtn.addEventListener('click', expandSidebar);
 
-    // Keyboard shortcut: Ctrl+Enter to load
     document.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -132,7 +134,6 @@
       }
     });
 
-    // Drag & drop
     document.addEventListener('dragenter', showDropOverlay);
     document.addEventListener('dragover', function (e) { e.preventDefault(); });
     document.addEventListener('dragleave', hideDropOverlay);
@@ -143,14 +144,6 @@
   //  URL CONVERSION
   // ═════════════════════════════════════════════════════════
 
-  /**
-   * Convert a GitHub blob URL to raw.githubusercontent.com.
-   * Also handles raw URLs and arbitrary JSON URLs directly.
-   *
-   * @param {string} url
-   * @returns {{ rawUrl: string }}
-   * @throws {Error}
-   */
   function convertGithubUrl(url) {
     url = url.trim();
 
@@ -158,11 +151,10 @@
       return { rawUrl: url };
     }
 
-    var githubBlobRe = /^https?:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/([^/]+\/.+)$/i;
-    var match = url.match(githubBlobRe);
-    if (match) {
-      var rawUrl = 'https://raw.githubusercontent.com/' + match[1] + '/' + match[2];
-      return { rawUrl: rawUrl };
+    var re = /^https?:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/([^/]+\/.+)$/i;
+    var m = url.match(re);
+    if (m) {
+      return { rawUrl: 'https://raw.githubusercontent.com/' + m[1] + '/' + m[2] };
     }
 
     try {
@@ -179,11 +171,6 @@
   //  DATA FETCHING
   // ═════════════════════════════════════════════════════════
 
-  /**
-   * Fetch JSON from the given URL.
-   * @param {string} rawUrl
-   * @returns {Promise<{ data: object, fetchTimeMs: number }>}
-   */
   async function fetchRiver(rawUrl) {
     var t0 = performance.now();
     var response;
@@ -213,33 +200,77 @@
   // ═════════════════════════════════════════════════════════
 
   /**
-   * Parse and validate the river JSON.
-   * QGIS exports coordinates as [longitude, latitude].
-   * We swap them to [latitude, longitude] for Leaflet.
+   * Detect whether paths is a flat array of points or an array of segments.
+   * Each point from QGIS is [longitude, latitude].
    *
-   * @param {object} data
-   * @returns {{ paths: number[][], latLngs: L.LatLng[] }}
-   * @throws {Error}
+   * Returns:
+   *   segments: [ [ [lat,lng], [lat,lng], ... ], ... ]
+   *   allPoints: flat [ [lat,lng], ... ] across all segments
    */
   function parseRiver(data) {
     if (!data || typeof data !== 'object') {
       throw new Error('JSON is not a valid object.');
     }
-
     if (!Array.isArray(data.paths)) {
       throw new Error('The JSON does not contain a "paths" array.');
     }
-
     if (data.paths.length === 0) {
       throw new Error('The "paths" array is empty.');
     }
 
-    var paths = [];
-    for (var i = 0; i < data.paths.length; i++) {
-      var pt = data.paths[i];
+    var first = data.paths[0];
+
+    // Detect format:
+    //   Flat:   paths = [ [lng, lat], [lng, lat], ... ]
+    //   Nested: paths = [ [ [lng,lat], [lng,lat], ... ], [ ... ], ... ]
+    var isNested = Array.isArray(first) && first.length > 0 && Array.isArray(first[0]);
+
+    var segments = []; // each element: array of [lat, lng]
+    var allPoints = [];
+
+    if (isNested) {
+      // Array of segments
+      for (var s = 0; s < data.paths.length; s++) {
+        var seg = data.paths[s];
+        if (!Array.isArray(seg) || seg.length === 0) continue;
+        var parsed = parseSegment(seg, s);
+        segments.push(parsed);
+        allPoints = allPoints.concat(parsed);
+      }
+    } else {
+      // Single flat array of [lng, lat] pairs
+      var parsed = parseSegment(data.paths, 0);
+      segments.push(parsed);
+      allPoints = parsed;
+    }
+
+    if (allPoints.length === 0) {
+      throw new Error('No valid coordinates found.');
+    }
+
+    return {
+      name: data.name || data.name_en || '(unnamed)',
+      slug: data.slug || '(no slug)',
+      segments: segments,
+      allPoints: allPoints,
+      segmentCount: segments.length,
+    };
+  }
+
+  /**
+   * Parse one segment (array of [lng, lat] from QGIS) into array of [lat, lng].
+   * Throws descriptive errors on bad data.
+   */
+  function parseSegment(seg, segIndex) {
+    var result = [];
+    for (var i = 0; i < seg.length; i++) {
+      var pt = seg[i];
 
       if (!Array.isArray(pt) || pt.length < 2) {
-        throw new Error('Point at index ' + i + ' is not a valid [lng, lat] array.');
+        throw new Error(
+          'Segment ' + segIndex + ', point ' + i +
+          ': expected [lng, lat] array, got ' + JSON.stringify(pt)
+        );
       }
 
       // QGIS format: [longitude, latitude]
@@ -247,29 +278,27 @@
       var lat = Number(pt[1]);
 
       if (!isFinite(lat) || !isFinite(lng)) {
-        throw new Error('Invalid coordinate at index ' + i + ': [' + pt[0] + ', ' + pt[1] + ']');
+        throw new Error(
+          'Segment ' + segIndex + ', point ' + i +
+          ': non-numeric coordinate [' + pt[0] + ', ' + pt[1] + ']'
+        );
       }
       if (lat < -90 || lat > 90) {
-        throw new Error('Latitude out of range at index ' + i + ': ' + lat);
+        throw new Error(
+          'Segment ' + segIndex + ', point ' + i +
+          ': latitude out of range (' + lat + ')'
+        );
       }
       if (lng < -180 || lng > 180) {
-        throw new Error('Longitude out of range at index ' + i + ': ' + lng);
+        throw new Error(
+          'Segment ' + segIndex + ', point ' + i +
+          ': longitude out of range (' + lng + ')'
+        );
       }
 
-      // Store as [lat, lng] internally
-      paths.push([lat, lng]);
+      result.push([lat, lng]); // Store as [lat, lng]
     }
-
-    var latLngs = paths.map(function (p) {
-      return L.latLng(p[0], p[1]);
-    });
-
-    return {
-      name: data.name || '(unnamed)',
-      slug: data.slug || '(no slug)',
-      paths: paths,
-      latLngs: latLngs,
-    };
+    return result;
   }
 
   // ═════════════════════════════════════════════════════════
@@ -277,14 +306,16 @@
   // ═════════════════════════════════════════════════════════
 
   function clearRiver() {
-    if (riverPolyline) { map.removeLayer(riverPolyline); riverPolyline = null; }
+    riverPolylines.forEach(function (pl) { map.removeLayer(pl); });
+    riverPolylines = [];
+
     if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
     if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
     clearPointNumberMarkers();
 
-    currentPaths = [];
+    allPaths = [];
+    segmentCount = 0;
     currentRiverData = null;
-    leafletLatLngs = [];
 
     infoPanel.classList.add('hidden');
     coordInspector.classList.add('hidden');
@@ -296,31 +327,28 @@
     pointNumberMarkers = [];
   }
 
-  /**
-   * Draw the parsed river on the map.
-   * @param {object} parsed
-   * @returns {number} renderTimeMs
-   */
   function drawRiver(parsed) {
     var t0 = performance.now();
-
     clearRiver();
 
-    currentPaths = parsed.paths;
+    allPaths = parsed.allPoints;
+    segmentCount = parsed.segmentCount;
     currentRiverData = parsed;
-    leafletLatLngs = parsed.latLngs;
 
-    // Polyline
-    riverPolyline = L.polyline(parsed.latLngs, {
-      color: '#2563eb',
-      weight: 3,
-      opacity: 0.85,
-      smoothFactor: 1,
-    }).addTo(map);
+    // Draw each segment as its own polyline
+    parsed.segments.forEach(function (seg) {
+      var latLngs = seg.map(function (p) { return L.latLng(p[0], p[1]); });
+      var pl = L.polyline(latLngs, {
+        color: '#2563eb',
+        weight: 3,
+        opacity: 0.85,
+        smoothFactor: 1,
+      }).addTo(map);
+      pl.on('click', handleCoordinateClick);
+      riverPolylines.push(pl);
+    });
 
-    riverPolyline.on('click', handleCoordinateClick);
-
-    // Start & end markers
+    // Start & end markers (first point of first seg, last point of last seg)
     if (toggleMarkersCb.checked) {
       addStartEndMarkers();
     }
@@ -330,82 +358,80 @@
       addPointNumberMarkers();
     }
 
-    // Fit bounds
-    map.fitBounds(riverPolyline.getBounds(), { padding: [30, 30] });
+    // Fit bounds to all polylines
+    fitRiver();
 
     return Math.round(performance.now() - t0);
   }
 
   function addStartEndMarkers() {
-    if (leafletLatLngs.length === 0) return;
+    if (allPaths.length === 0) return;
 
     var startIcon = L.divIcon({
       className: '',
       html: '<div style="width:14px;height:14px;background:#16a34a;border:3px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>',
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
+      iconSize: [14, 14], iconAnchor: [7, 7],
     });
-
     var endIcon = L.divIcon({
       className: '',
       html: '<div style="width:14px;height:14px;background:#dc2626;border:3px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>',
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
+      iconSize: [14, 14], iconAnchor: [7, 7],
     });
 
-    startMarker = L.marker(leafletLatLngs[0], { icon: startIcon })
-      .addTo(map).bindPopup('River Start');
+    var firstPt = allPaths[0];
+    var lastPt = allPaths[allPaths.length - 1];
 
-    endMarker = L.marker(leafletLatLngs[leafletLatLngs.length - 1], { icon: endIcon })
+    startMarker = L.marker([firstPt[0], firstPt[1]], { icon: startIcon })
+      .addTo(map).bindPopup('River Start');
+    endMarker = L.marker([lastPt[0], lastPt[1]], { icon: endIcon })
       .addTo(map).bindPopup('River End');
   }
 
   function addPointNumberMarkers() {
     clearPointNumberMarkers();
-    if (currentPaths.length === 0) return;
+    if (allPaths.length === 0) return;
 
-    for (var i = 0; i < currentPaths.length; i += POINT_NUMBER_INTERVAL) {
-      var icon = L.divIcon({
-        className: '',
-        html: '<div class="point-number-marker">' + i + '</div>',
-        iconSize: [22, 22],
-        iconAnchor: [11, 11],
-      });
-      var marker = L.marker(leafletLatLngs[i], { icon: icon }).addTo(map);
-      marker.bindPopup('#' + i + '<br>Lat: ' + currentPaths[i][0] + '<br>Lng: ' + currentPaths[i][1]);
-      pointNumberMarkers.push(marker);
+    for (var i = 0; i < allPaths.length; i += POINT_NUMBER_INTERVAL) {
+      addNumberedMarker(i);
     }
-
-    // Always mark the last point if not already covered
-    var lastIdx = currentPaths.length - 1;
+    // Always mark the last point
+    var lastIdx = allPaths.length - 1;
     if (lastIdx > 0 && lastIdx % POINT_NUMBER_INTERVAL !== 0) {
-      var icon = L.divIcon({
-        className: '',
-        html: '<div class="point-number-marker">' + lastIdx + '</div>',
-        iconSize: [22, 22],
-        iconAnchor: [11, 11],
-      });
-      var marker = L.marker(leafletLatLngs[lastIdx], { icon: icon }).addTo(map);
-      marker.bindPopup('#' + lastIdx + '<br>Lat: ' + currentPaths[lastIdx][0] + '<br>Lng: ' + currentPaths[lastIdx][1]);
-      pointNumberMarkers.push(marker);
+      addNumberedMarker(lastIdx);
     }
+  }
+
+  function addNumberedMarker(i) {
+    var icon = L.divIcon({
+      className: '',
+      html: '<div class="point-number-marker">' + i + '</div>',
+      iconSize: [22, 22], iconAnchor: [11, 11],
+    });
+    var pt = allPaths[i];
+    var marker = L.marker([pt[0], pt[1]], { icon: icon }).addTo(map);
+    marker.bindPopup('#' + i + '<br>Lat: ' + pt[0] + '<br>Lng: ' + pt[1]);
+    pointNumberMarkers.push(marker);
   }
 
   // ═════════════════════════════════════════════════════════
   //  CALCULATIONS
   // ═════════════════════════════════════════════════════════
 
-  function calculateLength(latLngs) {
+  function calculateLength() {
     var total = 0;
-    for (var i = 1; i < latLngs.length; i++) {
-      total += latLngs[i - 1].distanceTo(latLngs[i]);
+    for (var i = 1; i < allPaths.length; i++) {
+      var a = L.latLng(allPaths[i - 1][0], allPaths[i - 1][1]);
+      var b = L.latLng(allPaths[i][0], allPaths[i][1]);
+      total += a.distanceTo(b);
     }
     return total / 1000;
   }
 
-  function getBboxString(latLngs) {
-    if (latLngs.length === 0) return '\u2014';
-    var bounds = L.latLngBounds(latLngs);
+  function getBboxString() {
+    if (allPaths.length === 0) return '\u2014';
+    var bounds = L.latLngBounds(
+      allPaths.map(function (p) { return L.latLng(p[0], p[1]); })
+    );
     var sw = bounds.getSouthWest();
     var ne = bounds.getNorthEast();
     return sw.lat.toFixed(4) + ', ' + sw.lng.toFixed(4) +
@@ -415,12 +441,9 @@
   function findNearestPoint(latlng) {
     var minDist = Infinity;
     var minIdx = 0;
-    for (var i = 0; i < leafletLatLngs.length; i++) {
-      var d = latlng.distanceTo(leafletLatLngs[i]);
-      if (d < minDist) {
-        minDist = d;
-        minIdx = i;
-      }
+    for (var i = 0; i < allPaths.length; i++) {
+      var d = latlng.distanceTo(L.latLng(allPaths[i][0], allPaths[i][1]));
+      if (d < minDist) { minDist = d; minIdx = i; }
     }
     return minIdx;
   }
@@ -440,9 +463,10 @@
   }
 
   function updateInfoPanel(parsed, fetchTimeMs, renderTimeMs) {
-    infoPoints.textContent = parsed.paths.length.toLocaleString();
-    infoLength.textContent = calculateLength(parsed.latLngs).toFixed(2) + ' km';
-    infoBbox.textContent = getBboxString(parsed.latLngs);
+    infoPoints.textContent = parsed.allPoints.length.toLocaleString();
+    infoSegments.textContent = parsed.segmentCount;
+    infoLength.textContent = calculateLength().toFixed(2) + ' km';
+    infoBbox.textContent = getBboxString();
     infoFetchTime.textContent = fetchTimeMs + ' ms';
     infoRenderTime.textContent = renderTimeMs + ' ms';
     infoPanel.classList.remove('hidden');
@@ -450,14 +474,17 @@
   }
 
   function fitRiver() {
-    if (riverPolyline) {
-      map.fitBounds(riverPolyline.getBounds(), { padding: [30, 30] });
-    }
+    if (riverPolylines.length === 0) return;
+    var allBounds = L.latLngBounds([]);
+    riverPolylines.forEach(function (pl) {
+      allBounds.extend(pl.getBounds());
+    });
+    map.fitBounds(allBounds, { padding: [30, 30] });
   }
 
   function toggleMarkers() {
     if (toggleMarkersCb.checked) {
-      if (leafletLatLngs.length > 0 && !startMarker) {
+      if (allPaths.length > 0 && !startMarker) {
         addStartEndMarkers();
       } else if (startMarker) {
         startMarker.addTo(map);
@@ -473,7 +500,7 @@
 
   function togglePointNumbers() {
     if (togglePointNums.checked) {
-      if (currentPaths.length > 0 && pointNumberMarkers.length === 0) {
+      if (allPaths.length > 0 && pointNumberMarkers.length === 0) {
         addPointNumberMarkers();
       } else {
         pointNumberMarkers.forEach(function (m) { m.addTo(map); });
@@ -485,7 +512,7 @@
 
   function handleCoordinateClick(e) {
     var idx = findNearestPoint(e.latlng);
-    var pt = currentPaths[idx];
+    var pt = allPaths[idx];
     ciIndex.textContent = idx;
     ciLat.textContent = pt[0];
     ciLng.textContent = pt[1];
@@ -558,11 +585,11 @@
       showStatus('No data to copy.', 'error');
       return;
     }
-
     var text = [
-      'Total Points: ' + currentPaths.length.toLocaleString(),
-      'Path Length: ' + calculateLength(leafletLatLngs).toFixed(2) + ' km',
-      'Bounding Box: ' + getBboxString(leafletLatLngs),
+      'Total Points: ' + allPaths.length.toLocaleString(),
+      'Segments: ' + segmentCount,
+      'Path Length: ' + calculateLength().toFixed(2) + ' km',
+      'Bounding Box: ' + getBboxString(),
     ].join('\n');
 
     navigator.clipboard.writeText(text).then(function () {
@@ -570,16 +597,11 @@
     }).catch(function () {
       var ta = document.createElement('textarea');
       ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
+      ta.style.cssText = 'position:fixed;opacity:0';
       document.body.appendChild(ta);
       ta.select();
-      try {
-        document.execCommand('copy');
-        showStatus('Copied.', 'success');
-      } catch (_) {
-        showStatus('Copy failed.', 'error');
-      }
+      try { document.execCommand('copy'); showStatus('Copied.', 'success'); }
+      catch (_) { showStatus('Copy failed.', 'error'); }
       document.body.removeChild(ta);
     });
   }
@@ -593,18 +615,12 @@
       showStatus('html2canvas not loaded.', 'error');
       return;
     }
-
     showStatus('Exporting PNG...', 'info');
-
-    var mapEl = document.getElementById('map');
-    html2canvas(mapEl, {
-      useCORS: true,
-      allowTaint: true,
-      scale: 2,
+    html2canvas(document.getElementById('map'), {
+      useCORS: true, allowTaint: true, scale: 2,
     }).then(function (canvas) {
       var link = document.createElement('a');
-      var slug = currentRiverData ? currentRiverData.slug : 'map';
-      link.download = slug + '_map.png';
+      link.download = (currentRiverData ? currentRiverData.slug : 'map') + '_map.png';
       link.href = canvas.toDataURL('image/png');
       link.click();
       showStatus('Exported.', 'success');
@@ -620,70 +636,47 @@
   var dragCounter = 0;
 
   function showDropOverlay(e) {
-    e.preventDefault();
-    dragCounter++;
+    e.preventDefault(); dragCounter++;
     dropOverlay.classList.remove('hidden');
   }
-
   function hideDropOverlay(e) {
-    e.preventDefault();
-    dragCounter--;
-    if (dragCounter <= 0) {
-      dragCounter = 0;
-      dropOverlay.classList.add('hidden');
-    }
+    e.preventDefault(); dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.add('hidden'); }
   }
 
   function handleDrop(e) {
-    e.preventDefault();
-    dragCounter = 0;
+    e.preventDefault(); dragCounter = 0;
     dropOverlay.classList.add('hidden');
-
     var files = e.dataTransfer.files;
     if (files.length === 0) return;
-
     var file = files[0];
     if (!file.name.toLowerCase().endsWith('.json')) {
       showStatus('Please drop a .json file.', 'error');
       return;
     }
-
     loadFromFile(file);
   }
 
   function loadFromFile(file) {
     showStatus('Reading file...', 'info');
-
     var t0 = performance.now();
     var reader = new FileReader();
-
     reader.onload = function (e) {
       var data;
-      try {
-        data = JSON.parse(e.target.result);
-      } catch (err) {
-        showStatus('Bad JSON: ' + err.message, 'error');
-        return;
-      }
+      try { data = JSON.parse(e.target.result); }
+      catch (err) { showStatus('Bad JSON: ' + err.message, 'error'); return; }
 
       var fetchTimeMs = Math.round(performance.now() - t0);
-
       try {
         var parsed = parseRiver(data);
         var renderTimeMs = drawRiver(parsed);
         updateInfoPanel(parsed, fetchTimeMs, renderTimeMs);
-        showStatus('Loaded ' + parsed.paths.length.toLocaleString() + ' points.', 'success');
+        showStatus('Loaded ' + parsed.allPoints.length.toLocaleString() + ' points in ' + parsed.segmentCount + ' segments.', 'success');
         urlInput.value = '(file: ' + file.name + ')';
         saveLastUrl('');
-      } catch (err) {
-        showStatus(err.message, 'error');
-      }
+      } catch (err) { showStatus(err.message, 'error'); }
     };
-
-    reader.onerror = function () {
-      showStatus('Failed to read file.', 'error');
-    };
-
+    reader.onerror = function () { showStatus('Failed to read file.', 'error'); };
     reader.readAsText(file);
   }
 
@@ -693,51 +686,28 @@
 
   async function handleLoad() {
     var url = urlInput.value.trim();
+    if (!url) { showStatus('Enter a URL.', 'error'); return; }
 
-    if (!url) {
-      showStatus('Enter a URL.', 'error');
-      return;
-    }
-
-    // Step 1: Convert URL
     var rawUrl;
-    try {
-      var result = convertGithubUrl(url);
-      rawUrl = result.rawUrl;
-    } catch (err) {
-      showStatus(err.message, 'error');
-      return;
-    }
+    try { rawUrl = convertGithubUrl(url).rawUrl; }
+    catch (err) { showStatus(err.message, 'error'); return; }
 
-    // Step 2: Fetch
     showStatus('Fetching...', 'info');
 
     var fetchResult;
-    try {
-      fetchResult = await fetchRiver(rawUrl);
-    } catch (err) {
-      showStatus('Fetch failed: ' + err.message, 'error');
-      return;
-    }
+    try { fetchResult = await fetchRiver(rawUrl); }
+    catch (err) { showStatus('Fetch failed: ' + err.message, 'error'); return; }
 
-    // Step 3: Parse
     var parsed;
-    try {
-      parsed = parseRiver(fetchResult.data);
-    } catch (err) {
-      showStatus(err.message, 'error');
-      return;
-    }
+    try { parsed = parseRiver(fetchResult.data); }
+    catch (err) { showStatus(err.message, 'error'); return; }
 
-    // Step 4: Draw
     try {
       var renderTimeMs = drawRiver(parsed);
       updateInfoPanel(parsed, fetchResult.fetchTimeMs, renderTimeMs);
-      showStatus('Loaded ' + parsed.paths.length.toLocaleString() + ' points.', 'success');
+      showStatus('Loaded ' + parsed.allPoints.length.toLocaleString() + ' points in ' + parsed.segmentCount + ' segments.', 'success');
       saveLastUrl(url);
-    } catch (err) {
-      showStatus('Render error: ' + err.message, 'error');
-    }
+    } catch (err) { showStatus('Render error: ' + err.message, 'error'); }
   }
 
   function handleClear() {
