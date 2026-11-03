@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text Cleaner</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --text: #1c2127;
+    --muted: #5f6b7a;
+    --line: #d5dae1;
+    --accent: #1f6feb;
+    --accent-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b;
+      --surface: #1d2127;
+      --text: #e6e9ee;
+      --muted: #97a1ae;
+      --line: #343b45;
+      --accent: #4c8dff;
+      --accent-text: #0c1117;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px 16px 48px;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p.sub { margin: 0 0 20px; color: var(--muted); }
+  .opts {
+    display: flex; flex-wrap: wrap; gap: 8px 18px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;
+  }
+  .opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: .92rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  .pane label.t { display: block; font-weight: 600; margin-bottom: 6px; font-size: .95rem; }
+  textarea {
+    width: 100%; height: 340px; resize: vertical;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px; font: inherit; font-size: .95rem; line-height: 1.5;
+  }
+  textarea:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: .92rem; padding: 8px 16px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  .stats { color: var(--muted); font-size: .85rem; margin-left: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Text Cleaner</h1>
+  <p class="sub">Paste text on the left. Clean text appears on the right. Nothing leaves your browser.</p>
+
+  <div class="opts" id="opts">
+    <label><input type="checkbox" id="html" checked> Remove HTML tags</label>
+    <label><input type="checkbox" id="md" checked> Remove Markdown symbols</label>
+    <label><input type="checkbox" id="quotes" checked> Straighten quotes and dashes</label>
+    <label><input type="checkbox" id="invis" checked> Remove invisible characters</label>
+    <label><input type="checkbox" id="spaces" checked> Fix extra spaces</label>
+    <label><input type="checkbox" id="blank" checked> Collapse blank lines</label>
+    <label><input type="checkbox" id="emoji"> Remove emojis</label>
+    <label><input type="checkbox" id="nonascii"> Remove non-ASCII characters</label>
+    <label><input type="checkbox" id="oneline"> Join into one line</label>
+  </div>
+
+  <div class="grid">
+    <div class="pane">
+      <label class="t" for="in">Original</label>
+      <textarea id="in" placeholder="Paste your text here" autofocus></textarea>
+    </div>
+    <div class="pane">
+      <label class="t" for="out">Cleaned</label>
+      <textarea id="out" readonly></textarea>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button class="primary" id="copy">Copy cleaned text</button>
+    <button id="clear">Clear</button>
+    <span class="stats" id="stats">0 characters</span>
+  </div>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var input = $("in"), output = $("out");
+
+  function clean(t) {
+    // Always: normalize line endings and unicode form
+    t = t.replace(/\r\n?/g, "\n");
+    try { t = t.normalize("NFKC"); } catch (e) {}
+
+    if ($("html").checked) {
+      t = t.replace(/<br\s*\/?>/gi, "\n")
+           .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, "\n")
+           .replace(/<[^>]+>/g, "");
+      var ta = document.createElement("textarea");
+      ta.innerHTML = t; t = ta.value; // decode &amp; etc.
+    }
+
+    if ($("md").checked) {
+      t = t.replace(/^\s{0,3}#{1,6}\s+/gm, "")          // headings
+           .replace(/^\s{0,3}>\s?/gm, "")               // blockquotes
+           .replace(/^\s*([-*+]|\d+\.)\s+/gm, "")       // list markers
+           .replace(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/gm, "") // rules
+           .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")    // images
+           .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")     // links
+           .replace(/(\*\*|__)(.+?)\1/g, "$2")          // bold
+           .replace(/(\*|_)(.+?)\1/g, "$2")             // italic
+           .replace(/~~(.+?)~~/g, "$1")                 // strike
+           .replace(/`{1,3}/g, "");                     // code
+    }
+
+    if ($("quotes").checked) {
+      t = t.replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
+           .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+           .replace(/[\u2013\u2014\u2212]/g, "-")
+           .replace(/\u2026/g, "...");
+    }
+
+    if ($("invis").checked) {
+      t = t.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "")
+           .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ")
+           .replace(/[\u202A-\u202E\u2066-\u2069]/g, "")
+           .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+    }
+
+    if ($("emoji").checked) {
+      t = t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "");
+    }
+
+    if ($("nonascii").checked) {
+      t = t.replace(/[^\x00-\x7F]/g, "");
+    }
+
+    if ($("spaces").checked) {
+      t = t.replace(/\t/g, " ")
+           .replace(/[ ]{2,}/g, " ")
+           .replace(/^ +| +$/gm, "");
+    }
+
+    if ($("blank").checked) {
+      t = t.replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
+    }
+
+    if ($("oneline").checked) {
+      t = t.replace(/\s*\n\s*/g, " ").replace(/ {2,}/g, " ").trim();
+    }
+
+    return t;
+  }
+
+  function update() {
+    output.value = clean(input.value);
+    var n = output.value.length;
+    var w = output.value.trim() ? output.value.trim().split(/\s+/).length : 0;
+    $("stats").textContent = n + " characters, " + w + " words";
+  }
+
+  input.addEventListener("input", update);
+  $("opts").addEventListener("change", update);
+
+  $("clear").addEventListener("click", function () {
+    input.value = ""; update(); input.focus();
+  });
+
+  $("copy").addEventListener("click", function () {
+    var btn = this, done = function () {
+      btn.textContent = "Copied";
+      setTimeout(function () { btn.textContent = "Copy cleaned text"; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(output.value).then(done, function () {
+        output.select(); document.execCommand("copy"); done();
+      });
+    } else {
+      output.select(); document.execCommand("copy"); done();
+    }
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>
