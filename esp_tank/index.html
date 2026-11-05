@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Forza Horizon Tank Control</title>
+<style>
+  :root{--bg:#0f172a;--card:#1e293b;--accent:#22d3ee;--ok:#22c55e;--txt:#f8fafc;--muted:#94a3b8}
+  *{box-sizing:border-box;user-select:none;-webkit-user-select:none}
+  body{margin:0;padding:18px;font-family:system-ui,sans-serif;background:var(--bg);color:var(--txt);display:flex;flex-direction:column;gap:14px;max-width:440px;margin-inline:auto}
+  .card{background:var(--card);border-radius:18px;padding:16px;border:1px solid #334155}
+  h2{margin:0 0 10px;font-size:1.15rem;color:var(--accent)}
+  button{width:100%;padding:14px;border-radius:12px;border:none;font-size:1rem;font-weight:700;background:var(--accent);color:#0f172a;cursor:pointer}
+  .row{display:flex;justify-content:space-between;align-items:center;margin:6px 0;font-size:.9rem}
+  .badge{padding:4px 10px;border-radius:99px;font-size:.78rem;font-weight:700;background:#334155}
+  .badge.on{background:var(--ok);color:#052e16}
+  input[type=range]{width:100%;margin-top:8px;padding:8px;border-radius:8px;background:#0f172a;color:var(--txt);border:1px solid #475569}
+  .bars{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;text-align:center}
+  .bar-box{background:#0f172a;padding:12px;border-radius:12px;font-size:1.3rem;font-weight:700;color:var(--accent)}
+  .hint{font-size:.75rem;color:var(--muted);text-align:center;line-height:1.4}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Forza Horizon Tank Control</h2>
+  <button id="btBtn">Connect Bluetooth Tank</button>
+  <div class="row" style="margin-top:12px">
+    <span>Tank Connection</span>
+    <span class="badge" id="btStat">Disconnected</span>
+  </div>
+  <div class="row">
+    <span>Shooter III Dongle</span>
+    <span class="badge" id="gpStat">Waiting for input</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <span>Max Power Limit</span>
+    <b id="maxTxt">80%</b>
+  </div>
+  <input type="range" id="maxSpd" min="20" max="100" value="80">
+
+  <div class="bars">
+    <div class="bar-box">L: <span id="lVal">0</span>%</div>
+    <div class="bar-box">R: <span id="rVal">0</span>%</div>
+  </div>
+  
+  <div class="hint" style="margin-top:12px">
+    <b>R2</b> = Throttle &middot; <b>L2</b> = Brake / Reverse<br>
+    <b>Left Stick</b> = Steering (Tilt to turn, or spin in place at zero throttle)
+  </div>
+</div>
+
+<script>
+const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+const CHAR_UUID    = "19b10001-e8f2-537e-4f6c-d104768a1214";
+
+let bleChar = null, busy = false;
+const btBtn = document.getElementById('btBtn');
+const btStat = document.getElementById('btStat');
+const gpStat = document.getElementById('gpStat');
+const maxSpd = document.getElementById('maxSpd');
+const maxTxt = document.getElementById('maxTxt');
+const lVal = document.getElementById('lVal'), rVal = document.getElementById('rVal');
+
+maxSpd.oninput = () => maxTxt.textContent = maxSpd.value + '%';
+
+btBtn.onclick = async () => {
+  try {
+    const dev = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "ESP32-Tank" }],
+      optionalServices: [SERVICE_UUID]
+    });
+    dev.addEventListener('gattserverdisconnected', () => {
+      bleChar = null;
+      btStat.textContent = "Disconnected";
+      btStat.classList.remove('on');
+    });
+    const srv = await dev.gatt.connect();
+    const svc = await srv.getPrimaryService(SERVICE_UUID);
+    bleChar = await svc.getCharacteristic(CHAR_UUID);
+    btStat.textContent = "Connected";
+    btStat.classList.add('on');
+  } catch (e) {
+    alert("BLE Error: " + e.message);
+  }
+};
+
+function deadzone(v, dz = 0.12) {
+  if (Math.abs(v) < dz) return 0;
+  return (v - Math.sign(v) * dz) / (1 - dz);
+}
+
+function readGamepad() {
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  const gp = gps[0] || gps[1] || gps[2] || gps[3];
+  if (!gp) {
+    gpStat.textContent = "Waiting for input";
+    gpStat.classList.remove('on');
+    return [0, 0];
+  }
+  gpStat.textContent = "Active";
+  gpStat.classList.add('on');
+
+  const cap = parseInt(maxSpd.value, 10);
+
+  // Read Forza triggers (R2 = button 7, L2 = button 6)
+  // Hall-effect triggers output 0.0 (released) to 1.0 (fully depressed)
+  const r2 = gp.buttons[7]?.value || 0;
+  const l2 = gp.buttons[6]?.value || 0;
+  
+  // Net throttle: R2 drives forward, L2 drives backward
+  let throttle = r2 - l2;
+
+  // Steering from Left Stick X-axis (axis 0)
+  let steer = deadzone(gp.axes[0] || 0);
+
+  // Emergency stop if face buttons (A/B/X/Y) are held
+  if (gp.buttons[0]?.pressed || gp.buttons[1]?.pressed || gp.buttons[2]?.pressed || gp.buttons[3]?.pressed) {
+    return [0, 0];
+  }
+
+  let l = 0, r = 0;
+
+  if (Math.abs(throttle) < 0.02) {
+    // Zero throttle + stick tilt = Spin in place like a real tank
+    l = steer;
+    r = -steer;
+  } else {
+    // Moving: apply Forza style weight-transfer curve steering
+    // When steering right, left track speeds up slightly / right track slows down
+    l = throttle * (steer > 0 ? 1.0 : 1.0 + steer * 0.7);
+    r = throttle * (steer < 0 ? 1.0 : 1.0 - steer * 0.7);
+  }
+
+  const lPct = Math.round(Math.max(-1, Math.min(1, l)) * cap);
+  const rPct = Math.round(Math.max(-1, Math.min(1, r)) * cap);
+  return [lPct, rPct];
+}
+
+// 40 Hz (25 ms) low-latency BLE transmission loop
+setInterval(async () => {
+  const [l, r] = readGamepad();
+  lVal.textContent = l;
+  rVal.textContent = r;
+
+  if (!bleChar || busy) return;
+  busy = true;
+  try {
+    const packet = new Int8Array([l, r]);
+    if (bleChar.writeValueWithoutResponse) {
+      await bleChar.writeValueWithoutResponse(packet);
+    } else {
+      await bleChar.writeValue(packet);
+    }
+  } catch (e) {}
+  busy = false;
+}, 25);
+</script>
+</body>
+</html>
