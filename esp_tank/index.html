@@ -2,486 +2,271 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>ESP32 Forza Gamepad UI</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05070c">
+<title>Tank Pad</title>
 <style>
-  :root{
-    --bg1:#0b1120; --bg2:#1e293b; --card:#131c31; --edge:#2b3a55;
-    --text:#e2e8f0; --muted:#94a3b8; --accent:#22d3ee; --accent2:#818cf8;
-    --stop:#ef4444; --ok:#22c55e; --warn:#f59e0b;
-  }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
-  html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 0%,var(--bg2),var(--bg1) 70%);color:var(--text);font-family:system-ui,-apple-system,sans-serif;touch-action:none}
+:root{--bg:#05070c;--body1:#1c2232;--body2:#0d111b;--line:#2a3550;--text:#e8eefb;--dim:#7f8fb0;--cyan:#19e3ff;--pink:#ff2e88;--lime:#b6ff3b;--red:#ff3b3b;--led:var(--red);
+--mono:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;--font:"Bahnschrift","Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);touch-action:none;overscroll-behavior:none}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 
-  .gamepad-shell{
-    width:100%;height:100%;max-width:960px;margin:0 auto;padding:12px;
-    display:grid;
-    grid-template-columns:1fr 1.15fr 1fr;
-    grid-template-rows:auto 1fr;
-    gap:12px;align-items:center;
-  }
+/* controller body */
+.shell{position:fixed;inset:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));
+  border-radius:clamp(24px,6vh,52px);background:linear-gradient(180deg,var(--body1),var(--body2));
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.07),inset 0 -6px 18px rgba(0,0,0,.6),0 0 0 1px #000;
+  display:grid;grid-template-columns:1fr minmax(210px,.95fr) 1fr;gap:2vw;padding:3vh 3vw;align-items:center}
+.shell::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 4px 4px;background:var(--led);box-shadow:0 0 18px 2px var(--led);transition:.3s}
+.shell.live{--led:var(--cyan)}
+body.pad .virt{opacity:.3;pointer-events:none}
 
-  /* Portrait adaptation */
-  @media (max-width: 680px) and (orientation: portrait) {
-    .gamepad-shell{
-      grid-template-columns:1fr 1fr;
-      grid-template-rows:auto auto 1fr;
-      overflow-y:auto;
-    }
-    .hud-center{grid-column:1 / -1;order:1}
-    .left-wing{order:2}
-    .right-wing{order:3}
-  }
+/* left: stick */
+.left{display:flex;justify-content:center}
+.ring{position:relative;width:min(100%,64vh);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle,#0a0e17 55%,#161d2e 56%,#0a0e17 72%,#1b2336 73%);box-shadow:inset 0 6px 20px #000,0 2px 0 rgba(255,255,255,.06)}
+.ring::before{content:"";position:absolute;inset:10%;border-radius:50%;border:2px dashed #223050}
+.stick{position:absolute;inset:0;border-radius:50%;touch-action:none}
+.knob{position:absolute;left:50%;top:50%;width:42%;aspect-ratio:1;margin:-21% 0 0 -21%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 50% 50%,#10151f 0 38%,#1d2538 39% 46%,#10151f 47%),radial-gradient(circle at 35% 30%,#3a4666,#0d1220);
+  border:3px solid #3a4666;box-shadow:0 10px 22px #000c,inset 0 2px 0 rgba(255,255,255,.12)}
+.stick.on+.knob{border-color:var(--cyan);box-shadow:0 0 26px rgba(25,227,255,.45),0 10px 22px #000c}
 
-  .panel{
-    background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,0));
-    background-color:var(--card);border:1px solid var(--edge);border-radius:24px;
-    padding:14px;box-shadow:0 10px 28px rgba(0,0,0,.45);
-    display:flex;flex-direction:column;align-items:center;justify-content:space-between;
-    height:100%;
-  }
+/* center: screen */
+.mid{display:flex;flex-direction:column;gap:1.6vh;padding:1.8vh 14px;border-radius:18px;background:#070a12;border:1px solid var(--line);box-shadow:inset 0 0 30px rgba(25,227,255,.06)}
+.row{display:flex;align-items:center;gap:8px}
+.brand{font-weight:800;letter-spacing:.16em;font-size:clamp(.85rem,2.6vh,1.1rem);margin-right:auto}.brand i{font-style:normal;color:var(--pink)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:none;padding:6px 10px;font-weight:700;font-size:.7rem;letter-spacing:.06em;color:var(--dim)}
+.seg button[aria-pressed=true]{background:var(--cyan);color:#001018}
+.btn{border:1px solid var(--cyan);background:none;color:var(--cyan);border-radius:8px;padding:8px 10px;font-weight:800;font-size:.72rem;letter-spacing:.08em;flex:1}
+.btn.live{background:var(--cyan);color:#001018}
+.btn.sq{flex:0 0 auto;border-color:var(--line);color:var(--dim)}
+.state{font-size:.68rem;color:var(--dim);display:flex;justify-content:space-between}
+.state b{color:var(--text);font-weight:700}
+.tr .lab{display:flex;justify-content:space-between;font-size:.66rem;font-weight:700;letter-spacing:.1em;color:var(--dim);margin-bottom:3px}
+.tr b{font-family:var(--mono);color:var(--text);font-size:.85rem}
+.bar{position:relative;height:12px;border-radius:3px;background:#0d121d;border:1px solid var(--line)}
+.bar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;background:var(--dim)}
+.bar i{position:absolute;top:0;bottom:0;left:50%;width:0;border-radius:2px}
+.pw .lab{display:flex;justify-content:space-between;font-size:.66rem;font-weight:700;letter-spacing:.1em;color:var(--dim);margin-bottom:5px}
+.pw b{font-family:var(--mono);color:var(--lime)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--lime) var(--f,80%),#0d121d var(--f,80%));border:1px solid var(--line);touch-action:pan-x}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:26px;border-radius:5px;background:var(--text);border:2px solid var(--lime)}
+input[type=range]::-moz-range-thumb{width:18px;height:24px;border-radius:5px;background:var(--text);border:2px solid var(--lime)}
 
-  /* Center HUD */
-  .hud-center{justify-content:center;gap:10px}
-  .top-bar{width:100%;display:flex;justify-content:space-between;align-items:center}
-  h1{font-size:1.05rem;margin:0;letter-spacing:.6px}
-  h1 span{color:var(--accent)}
-  .bt-btn{
-    width:100%;padding:11px;border-radius:12px;border:none;
-    font-size:.9rem;font-weight:700;background:var(--accent);color:#06121f;cursor:pointer;
-  }
-  .badges{width:100%;display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)}
-  .badge{padding:2px 8px;border-radius:99px;font-weight:700;background:#1e293b;color:var(--muted)}
-  .badge.on{background:var(--ok);color:#052e16}
+/* right: pedals + brake */
+.right{display:grid;grid-template-columns:1fr 1.25fr;grid-template-rows:auto 1fr;gap:2vh 1.6vw;height:100%;max-height:78vh;justify-self:center;width:min(100%,420px)}
+.brake{grid-column:1;justify-self:center;width:min(100%,19vh);aspect-ratio:1;border-radius:50%;border:3px solid #5a1a1a;touch-action:none;font-weight:800;letter-spacing:.12em;font-size:clamp(.6rem,2vh,.8rem);
+  background:radial-gradient(circle at 35% 30%,#ff6a6a,#a10f0f);color:#fff;box-shadow:0 6px 0 #4a0a0a,0 10px 20px #000a}
+.brake.on{transform:translateY(5px);box-shadow:0 1px 0 #4a0a0a,0 0 28px rgba(255,59,59,.7)}
+.pedal{position:relative;overflow:hidden;border-radius:16px 16px 22px 22px;border:2px solid var(--line);touch-action:none;
+  background:repeating-linear-gradient(0deg,#121827 0 7px,#0d121d 7px 14px);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:10px 4px}
+.pedal.l{grid-column:1;grid-row:2}.pedal.r{grid-column:2;grid-row:1/3}
+.pedal i{position:absolute;inset:auto 0 0 0;height:0;pointer-events:none;opacity:.9}
+.pedal.r i{background:linear-gradient(0deg,#0a6d80,var(--cyan))}.pedal.l i{background:linear-gradient(0deg,#7a1240,var(--pink))}
+.pedal b,.pedal span{position:relative;pointer-events:none;text-shadow:0 1px 4px #000}
+.pedal b{font-family:var(--mono);font-size:clamp(.85rem,2.6vh,1.15rem)}
+.pedal span{font-size:.66rem;font-weight:800;letter-spacing:.14em}
+.pedal.hot.r{border-color:var(--cyan)}.pedal.hot.l{border-color:var(--pink)}
 
-  .telem{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center}
-  .t-box{background:#090f1d;border:1px solid var(--edge);border-radius:12px;padding:8px}
-  .t-box small{display:block;font-size:.65rem;color:var(--muted);text-transform:uppercase}
-  .t-box b{font-size:1.25rem;color:var(--accent)}
+#toast{position:fixed;left:50%;bottom:14px;transform:translate(-50%,30px);opacity:0;transition:.25s;padding:9px 14px;background:#1a0f16;border:1px solid var(--pink);border-radius:8px;font-size:.8rem;max-width:90vw;text-align:center;pointer-events:none;z-index:30}
+#toast.show{opacity:1;transform:translate(-50%,0)}
 
-  .slider-wrap{width:100%}
-  .slider-head{display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:4px;color:var(--muted)}
-  .slider-head b{color:var(--accent)}
-  input[type=range]{
-    -webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:99px;outline:none;
-    background:linear-gradient(90deg,var(--accent2),var(--accent)) 0/var(--fill,80%) 100% no-repeat,#090f1d;
-    border:1px solid var(--edge);
-  }
-  input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;width:24px;height:24px;border-radius:50%;
-    background:#fff;border:3px solid var(--accent);
-  }
-
-  /* Left Wing: Virtual Stick + D-Pad */
-  .stick-zone{
-    position:relative;width:150px;height:150px;border-radius:50%;
-    background:radial-gradient(circle,#1e293b 0%,#090f1d 75%);
-    border:2px solid var(--edge);box-shadow:inset 0 4px 14px rgba(0,0,0,.7);
-    display:flex;align-items:center;justify-content:center;touch-action:none;
-  }
-  .stick-cross{
-    position:absolute;width:80%;height:2px;background:rgba(148,163,184,.18);pointer-events:none;
-  }
-  .stick-knob{
-    position:absolute;width:64px;height:64px;border-radius:50%;
-    background:radial-gradient(circle at 35% 30%,#38bdf8,#0284c7);
-    border:3px solid #bae6fd;box-shadow:0 6px 16px rgba(0,0,0,.6);
-    transform:translate(0px,0px);pointer-events:none;transition:background .15s;
-  }
-  .stick-zone.active .stick-knob{background:radial-gradient(circle at 35% 30%,#a5f3fc,#22d3ee);box-shadow:0 0 20px rgba(34,211,238,.6)}
-
-  /* D-Pad */
-  .dpad{
-    display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:4px;
-  }
-  .d-btn{
-    background:#19253d;border:1px solid var(--edge);border-radius:10px;
-    color:var(--text);display:flex;align-items:center;justify-content:center;
-    font-size:1rem;font-weight:700;box-shadow:0 3px 0 #090f1d;
-  }
-  .d-btn.active{background:var(--accent);color:#06121f;transform:translateY(2px);box-shadow:0 1px 0 #090f1d}
-
-  /* Right Wing: Analog L2/R2 Pedals + ABXY */
-  .triggers{
-    width:100%;display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;max-height:175px;
-  }
-  .trig-pad{
-    position:relative;background:#090f1d;border:2px solid var(--edge);border-radius:18px;
-    overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;
-    padding:10px;align-items:center;touch-action:none;cursor:pointer;
-  }
-  .trig-fill{
-    position:absolute;bottom:0;left:0;right:0;height:0%;
-    transition:height .04s linear;pointer-events:none;
-  }
-  .trig-pad.l2 .trig-fill{background:linear-gradient(0deg,rgba(239,68,68,.35),rgba(239,68,68,.85))}
-  .trig-pad.r2 .trig-fill{background:linear-gradient(0deg,rgba(34,211,238,.3),rgba(34,211,238,.85))}
-  .trig-pad span,.trig-pad b{position:relative;z-index:1;pointer-events:none}
-  .trig-pad span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
-  .trig-pad b{font-size:1.15rem}
-
-  /* ABXY Diamond */
-  .abxy{
-    display:grid;grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:4px;
-    margin-top:8px;
-  }
-  .f-btn{
-    border-radius:50%;border:1px solid var(--edge);background:#19253d;
-    color:var(--text);font-weight:800;font-size:.85rem;
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:0 4px 0 #090f1d;cursor:pointer;
-  }
-  .f-btn.b-a{border-color:#22c55e;color:#4ade80}
-  .f-btn.b-b{border-color:#ef4444;color:#f87171}
-  .f-btn.b-x{border-color:#38bdf8;color:#7dd3fc}
-  .f-btn.b-y{border-color:#eab308;color:#fde047}
-  .f-btn.active{transform:translateY(3px);background:var(--stop);color:#fff;box-shadow:0 1px 0 #090f1d}
-
-  .sub-label{font-size:.7rem;color:var(--muted);text-align:center;margin-top:4px}
+/* overlays */
+.over{position:fixed;inset:0;z-index:20;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:20px}
+.over h1{margin:0;letter-spacing:.2em;font-size:1.6rem}.over h1 i{font-style:normal;color:var(--pink)}
+.over p{margin:0;color:var(--dim);font-size:.9rem;max-width:34ch;line-height:1.5}
+.go{padding:14px 40px;border:2px solid var(--cyan);background:none;color:var(--cyan);font-weight:800;letter-spacing:.2em;border-radius:10px;font-size:1rem}
+#rotate{display:none;z-index:25}
+.phone{width:46px;height:76px;border:3px solid var(--cyan);border-radius:9px;animation:rot 2.4s ease-in-out infinite}
+@keyframes rot{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (max-width:820px) and (orientation:portrait){#rotate{display:flex}}
+@media (max-height:420px){.state,.brand{display:none}.mid{gap:1.2vh}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-
-<div class="gamepad-shell">
-
-  <!-- LEFT SIDE: Steering Stick + D-Pad -->
-  <div class="panel left-wing">
-    <div class="sub-label"><b>LEFT STICK</b> &middot; Steer / Axis Spin</div>
-    <div class="stick-zone" id="stickZone">
-      <div class="stick-cross"></div>
-      <div class="stick-knob" id="stickKnob"></div>
-    </div>
-
-    <div class="dpad">
-      <div></div>
-      <div class="d-btn" data-dp="U">&#9650;</div>
-      <div></div>
-      <div class="d-btn" data-dp="L">&#9664;</div>
-      <div></div>
-      <div class="d-btn" data-dp="R">&#9654;</div>
-      <div></div>
-      <div class="d-btn" data-dp="D">&#9660;</div>
-      <div></div>
-    </div>
-    <div class="sub-label">D-Pad Digital Override</div>
+<div class="shell" id="shell">
+  <div class="left virt">
+    <div class="ring"><div class="stick" id="stick" aria-label="Steering stick"></div><div class="knob" id="knob"></div></div>
   </div>
 
-  <!-- CENTER HUD: BLE Connect, Speed Cap, Telemetry -->
-  <div class="panel hud-center">
-    <div class="top-bar">
-      <h1>FORZA <span>TANK PAD</span></h1>
+  <div class="mid">
+    <div class="row"><div class="brand">TANK<i>PAD</i></div>
+      <div class="seg" role="group" aria-label="Input mode"><button id="mTouch" aria-pressed="true">TOUCH</button><button id="mPad" aria-pressed="false">GAMEPAD</button></div>
     </div>
-
-    <button class="bt-btn" id="btBtn">Connect Bluetooth Tank</button>
-
-    <div class="badges">
-      <span>BLE: <b class="badge" id="btStat">Offline</b></span>
-      <span>Shooter III: <b class="badge" id="gpStat">None</b></span>
-    </div>
-
-    <div class="telem">
-      <div class="t-box"><small>Left Track</small><b id="lVal">0%</b></div>
-      <div class="t-box"><small>Right Track</small><b id="rVal">0%</b></div>
-    </div>
-
-    <div class="slider-wrap">
-      <div class="slider-head"><span>MAX POWER LIMIT</span><b id="sv">80%</b></div>
-      <input type="range" id="speed" min="20" max="100" value="80">
-    </div>
-
-    <div class="sub-label">
-      Hold/Slide <b>R2</b> (Gas) or <b>L2</b> (Brake/Rev) + Drag <b>Left Stick</b> to steer.<br>
-      Keyboard: W A S D / Arrows &middot; Space or A/B/X/Y = E-Brake
-    </div>
+    <div class="row"><button class="btn" id="btBtn">CONNECT TANK</button><button class="btn sq" id="fsBtn" aria-label="Fullscreen">&#x26F6;</button></div>
+    <div class="state"><span>Tank <b id="btTxt">offline</b></span><span>Pad <b id="gpTxt">none</b></span></div>
+    <div class="tr"><div class="lab"><span>LEFT TRACK</span><b id="lVal">0%</b></div><div class="bar"><i id="lBar"></i></div></div>
+    <div class="tr"><div class="lab"><span>RIGHT TRACK</span><b id="rVal">0%</b></div><div class="bar"><i id="rBar"></i></div></div>
+    <div class="pw"><div class="lab"><span>POWER LIMIT</span><b id="sv">80%</b></div><input type="range" id="speed" min="20" max="100" value="80" aria-label="Power limit"></div>
   </div>
 
-  <!-- RIGHT SIDE: Analog L2/R2 Triggers + ABXY -->
-  <div class="panel right-wing">
-    <div class="sub-label"><b>ANALOG TRIGGERS</b> (Slide Up = More Power)</div>
-    <div class="triggers">
-      <div class="trig-pad l2" id="l2Pad">
-        <div class="trig-fill" id="l2Fill"></div>
-        <span>L2 Brake/Rev</span>
-        <b id="l2Txt">0%</b>
-      </div>
-      <div class="trig-pad r2" id="r2Pad">
-        <div class="trig-fill" id="r2Fill"></div>
-        <span>R2 Throttle</span>
-        <b id="r2Txt">0%</b>
-      </div>
-    </div>
-
-    <div class="abxy">
-      <div></div>
-      <div class="f-btn b-y" data-eb="Y">Y</div>
-      <div></div>
-      <div class="f-btn b-x" data-eb="X">X</div>
-      <div></div>
-      <div class="f-btn b-b" data-eb="B">B</div>
-      <div></div>
-      <div class="f-btn b-a" data-eb="A">A</div>
-      <div></div>
-    </div>
-    <div class="sub-label">A / B / X / Y = Emergency Brake</div>
+  <div class="right virt">
+    <button class="brake" id="brake">E-BRAKE</button>
+    <div class="pedal l" id="l2"><i></i><span>REV</span><b>0%</b></div>
+    <div class="pedal r" id="r2"><i></i><span>GAS</span><b>0%</b></div>
   </div>
-
 </div>
 
+<div class="over" id="start">
+  <h1>TANK<i>PAD</i></h1>
+  <p>Full-screen gamepad for your ESP32 tank. Hold your phone sideways.</p>
+  <button class="go" id="goBtn">START</button>
+</div>
+<div class="over" id="rotate"><div class="phone"></div><p>Rotate your phone to landscape</p></div>
+<div id="toast" role="status"></div>
+
 <script>
+"use strict";
 const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
 const CHAR_UUID    = "19b10001-e8f2-537e-4f6c-d104768a1214";
-
-// Sharp cornering factor when moving + steering (1.15 locks inside belt at ~87% stick and counter-rotates at 100%)
 const TURN_SHARPNESS = 1.15;
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch(_){} };
 
-let bleChar = null, busy = false;
-const btBtn  = document.getElementById('btBtn');
-const btStat = document.getElementById('btStat');
-const gpStat = document.getElementById('gpStat');
-const speed  = document.getElementById('speed'), sv = document.getElementById('sv');
-const lVal   = document.getElementById('lVal'),  rVal = document.getElementById('rVal');
-
-// On-screen touch state
-let touchSteer = 0, touchSteerY = 0, stickActive = false;
-let touchR2 = 0, touchL2 = 0;
-let touchEBrake = false;
-const dpadHeld = new Set();
+let bleChar = null, bleDev = null, busy = false, lastSent = "", lastSentAt = 0, mode = "touch";
+const T = {steerX:0, steerY:0, stick:false, r2:0, l2:0, brake:false};
 const keys = new Set();
 
-function fillSlider() {
-  speed.style.setProperty('--fill', speed.value + '%');
-  sv.textContent = speed.value + '%';
-}
-speed.addEventListener('input', fillSlider);
-fillSlider();
+let tt; function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove("show"),3500); }
+function resetInputs(){ Object.assign(T,{steerX:0,steerY:0,stick:false,r2:0,l2:0,brake:false}); keys.clear(); $("stick").classList.remove("on"); $("brake").classList.remove("on"); }
 
-// ---------- Web Bluetooth Connection ----------
-btBtn.onclick = async () => {
+/* start: fullscreen + landscape lock */
+async function enterFull(){
+  try { await document.documentElement.requestFullscreen({navigationUI:"hide"}); } catch(_){}
+  try { await screen.orientation.lock("landscape"); } catch(_){}
+}
+$("goBtn").onclick = async () => { $("start").style.display = "none"; await enterFull(); };
+$("fsBtn").onclick = () => document.fullscreenElement ? document.exitFullscreen() : enterFull();
+
+/* mode toggle */
+function setMode(m){
+  mode = m; resetInputs();
+  document.body.classList.toggle("pad", m==="pad");
+  $("mTouch").setAttribute("aria-pressed", m==="touch"); $("mPad").setAttribute("aria-pressed", m==="pad");
+  try { localStorage.setItem("tankpad.mode", m); } catch(_){}
+}
+$("mTouch").onclick = () => setMode("touch"); $("mPad").onclick = () => setMode("pad");
+try { const s = localStorage.getItem("tankpad.mode"); if (s==="pad"||s==="touch") setMode(s); } catch(_){}
+addEventListener("gamepadconnected", e => { toast("Gamepad connected"); setMode("pad"); });
+addEventListener("gamepaddisconnected", () => { toast("Gamepad lost. Back to touch."); setMode("touch"); });
+
+/* power */
+const speed = $("speed");
+function fill(){ speed.style.setProperty("--f", speed.value+"%"); $("sv").textContent = speed.value+"%"; }
+speed.addEventListener("input", fill); fill();
+
+/* wake lock */
+async function keepAwake(){ try { await navigator.wakeLock.request("screen"); } catch(_){} }
+document.addEventListener("visibilitychange", () => { if (!document.hidden && bleChar) keepAwake(); });
+
+/* bluetooth */
+function setBt(on){
+  $("btTxt").textContent = on ? "connected" : "offline";
+  $("btBtn").textContent = on ? "DISCONNECT" : "CONNECT TANK";
+  $("btBtn").classList.toggle("live", on); $("shell").classList.toggle("live", on);
+}
+$("btBtn").onclick = async () => {
+  if (bleDev && bleDev.gatt.connected) { bleDev.gatt.disconnect(); return; }
+  if (!navigator.bluetooth) { toast("Web Bluetooth needs Chrome or Edge over HTTPS."); return; }
   try {
-    const dev = await navigator.bluetooth.requestDevice({
-      filters: [{ name: "ESP32-Tank" }],
-      optionalServices: [SERVICE_UUID]
-    });
-    dev.addEventListener('gattserverdisconnected', () => {
-      bleChar = null;
-      btStat.textContent = "Offline";
-      btStat.classList.remove('on');
-    });
+    const dev = await navigator.bluetooth.requestDevice({filters:[{name:"ESP32-Tank"}], optionalServices:[SERVICE_UUID]});
+    dev.addEventListener("gattserverdisconnected", () => { bleChar=null; bleDev=null; setBt(false); toast("Tank disconnected"); });
     const srv = await dev.gatt.connect();
     const svc = await srv.getPrimaryService(SERVICE_UUID);
     bleChar = await svc.getCharacteristic(CHAR_UUID);
-    btStat.textContent = "Connected";
-    btStat.classList.add('on');
-  } catch (e) {
-    alert("BLE Error: " + e.message);
-  }
+    bleDev = dev; setBt(true); keepAwake(); toast("Tank connected");
+  } catch (e) { if (e.name !== "NotFoundError") toast("Bluetooth: " + (e.message || e.name)); }
 };
 
-// ---------- Virtual Left Analog Stick ----------
-const stickZone = document.getElementById('stickZone');
-const stickKnob = document.getElementById('stickKnob');
-const MAX_RAD   = 44;
-
-function updateStickFromPointer(e) {
-  const rect = stickZone.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  let dx = e.clientX - cx;
-  let dy = e.clientY - cy;
-  const dist = Math.hypot(dx, dy);
-  if (dist > MAX_RAD) {
-    dx = (dx / dist) * MAX_RAD;
-    dy = (dy / dist) * MAX_RAD;
-  }
-  touchSteer  = Math.max(-1, Math.min(1, dx / MAX_RAD));
-  touchSteerY = Math.max(-1, Math.min(1, dy / MAX_RAD));
+/* stick */
+const stick = $("stick"), knob = $("knob");
+let maxPx = 40;
+function stickMove(e){
+  const r = stick.getBoundingClientRect(); maxPx = r.width * 0.29;
+  let dx = e.clientX-(r.left+r.width/2), dy = e.clientY-(r.top+r.height/2);
+  const d = Math.hypot(dx,dy); if (d > maxPx) { dx*=maxPx/d; dy*=maxPx/d; }
+  T.steerX = clamp(dx/maxPx,-1,1); T.steerY = clamp(dy/maxPx,-1,1);
 }
+stick.addEventListener("pointerdown", e => { e.preventDefault(); stick.setPointerCapture(e.pointerId); T.stick=true; stick.classList.add("on"); stickMove(e); });
+stick.addEventListener("pointermove", e => { if (T.stick) stickMove(e); });
+["pointerup","pointercancel","lostpointercapture"].forEach(ev => stick.addEventListener(ev, () => { T.stick=false; T.steerX=T.steerY=0; stick.classList.remove("on"); }));
 
-stickZone.addEventListener('pointerdown', e => {
-  e.preventDefault();
-  stickZone.setPointerCapture(e.pointerId);
-  stickActive = true;
-  stickZone.classList.add('active');
-  updateStickFromPointer(e);
-});
-stickZone.addEventListener('pointermove', e => {
-  if (!stickActive) return;
-  updateStickFromPointer(e);
-});
-['pointerup','pointercancel'].forEach(ev =>
-  stickZone.addEventListener(ev, () => {
-    stickActive = false;
-    touchSteer = 0;
-    touchSteerY = 0;
-    stickZone.classList.remove('active');
-  })
-);
-
-// ---------- Virtual Analog Triggers (L2 & R2) ----------
-function bindTriggerPad(padEl, setFn) {
-  let active = false;
-  function calcVal(e) {
-    const rect = padEl.getBoundingClientRect();
-    // Bottom of pad = 0.25, Top of pad = 1.0 (so even tapping bottom gives gentle movement)
-    const rel = 1 - ((e.clientY - rect.top) / rect.height);
-    const val = Math.max(0.2, Math.min(1.0, rel));
-    setFn(val);
-  }
-  padEl.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    padEl.setPointerCapture(e.pointerId);
-    active = true;
-    calcVal(e);
-  });
-  padEl.addEventListener('pointermove', e => {
-    if (active) calcVal(e);
-  });
-  ['pointerup','pointercancel'].forEach(ev =>
-    padEl.addEventListener(ev, () => { active = false; setFn(0); })
-  );
+/* pedals */
+function bindPedal(el, key){
+  let on = false;
+  const calc = e => { const r = el.getBoundingClientRect(); T[key] = clamp(1-(e.clientY-r.top)/r.height, 0.2, 1); };
+  el.addEventListener("pointerdown", e => { e.preventDefault(); el.setPointerCapture(e.pointerId); on=true; calc(e); buzz(8); });
+  el.addEventListener("pointermove", e => { if (on) calc(e); });
+  ["pointerup","pointercancel","lostpointercapture"].forEach(ev => el.addEventListener(ev, () => { on=false; T[key]=0; }));
 }
-bindTriggerPad(document.getElementById('r2Pad'), v => { touchR2 = v; });
-bindTriggerPad(document.getElementById('l2Pad'), v => { touchL2 = v; });
+bindPedal($("r2"),"r2"); bindPedal($("l2"),"l2");
 
-// ---------- Virtual D-Pad & Face Buttons ----------
-document.querySelectorAll('.d-btn').forEach(btn => {
-  const dir = btn.dataset.dp;
-  btn.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    btn.setPointerCapture(e.pointerId);
-    dpadHeld.add(dir);
-    btn.classList.add('active');
-  });
-  ['pointerup','pointercancel'].forEach(ev =>
-    btn.addEventListener(ev, () => {
-      dpadHeld.delete(dir);
-      btn.classList.remove('active');
-    })
-  );
-});
+/* e-brake */
+const brake = $("brake");
+brake.addEventListener("pointerdown", e => { e.preventDefault(); brake.setPointerCapture(e.pointerId); T.brake=true; brake.classList.add("on"); buzz(25); });
+["pointerup","pointercancel","lostpointercapture"].forEach(ev => brake.addEventListener(ev, () => { T.brake=false; brake.classList.remove("on"); }));
 
-document.querySelectorAll('.f-btn').forEach(btn => {
-  btn.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    btn.setPointerCapture(e.pointerId);
-    touchEBrake = true;
-    btn.classList.add('active');
-  });
-  ['pointerup','pointercancel'].forEach(ev =>
-    btn.addEventListener(ev, () => {
-      touchEBrake = false;
-      btn.classList.remove('active');
-    })
-  );
-});
+/* keyboard */
+const KEYS = ["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"," "];
+addEventListener("keydown", e => { const k=e.key.toLowerCase(); if (KEYS.includes(k)) { e.preventDefault(); keys.add(k); } });
+addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
 
-// ---------- Keyboard Support ----------
-addEventListener('keydown', e => {
-  const k = e.key.toLowerCase();
-  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) {
-    e.preventDefault();
-    keys.add(k);
+/* failsafe */
+function failsafe(){ resetInputs(); if (bleChar) send([0,0], true); }
+addEventListener("blur", failsafe); addEventListener("pagehide", failsafe);
+document.addEventListener("visibilitychange", () => { if (document.hidden) failsafe(); });
+
+/* input mixing */
+const dz = (v,d=0.12) => Math.abs(v)<d ? 0 : (v-Math.sign(v)*d)/(1-d);
+function sample(){
+  const cap = +speed.value;
+  const gp = [...(navigator.getGamepads ? navigator.getGamepads() : [])].find(Boolean);
+  $("gpTxt").textContent = gp ? "ready" : "none";
+  let r2=0, l2=0, steer=0, eb=false;
+  if (mode==="pad" && gp) {
+    r2 = gp.buttons[7]?.value||0; l2 = gp.buttons[6]?.value||0; steer = dz(gp.axes[0]||0);
+    eb = [0,1,2,3].some(i => gp.buttons[i]?.pressed);
+    if (gp.buttons[12]?.pressed) r2=1; if (gp.buttons[13]?.pressed) l2=1;
+    if (gp.buttons[14]?.pressed) steer=-1; if (gp.buttons[15]?.pressed) steer=1;
+  } else if (mode==="touch") { r2=T.r2; l2=T.l2; steer=T.steerX; }
+  if (keys.has("w")||keys.has("arrowup")) r2=1;
+  if (keys.has("s")||keys.has("arrowdown")) l2=1;
+  if (keys.has("a")||keys.has("arrowleft")) steer=-1;
+  if (keys.has("d")||keys.has("arrowright")) steer=1;
+  eb = eb || T.brake || keys.has(" ");
+
+  const m = stick.clientWidth*0.29 || maxPx;
+  knob.style.transform = `translate(${steer*m}px,${(T.stick?T.steerY:0)*m}px)`;
+  for (const [id,v] of [["r2",r2],["l2",l2]]) {
+    const el=$(id); el.querySelector("i").style.height = Math.round(v*100)+"%";
+    el.querySelector("b").textContent = Math.round(v*100)+"%"; el.classList.toggle("hot", v>0.02);
   }
-});
-addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
-addEventListener('blur', () => {
-  keys.clear(); dpadHeld.clear();
-  touchR2 = 0; touchL2 = 0; touchSteer = 0; touchSteerY = 0; touchEBrake = false;
-});
-
-// ---------- Combined Forza Input & Visual Sync ----------
-function deadzone(v, dz = 0.12) {
-  if (Math.abs(v) < dz) return 0;
-  return (v - Math.sign(v) * dz) / (1 - dz);
+  if (eb) return [0,0];
+  const th = r2-l2; let l, r;
+  if (Math.abs(th)<0.02) { l=steer; r=-steer; }
+  else { l = th*(steer>0 ? 1 : 1+steer*TURN_SHARPNESS); r = th*(steer<0 ? 1 : 1-steer*TURN_SHARPNESS); }
+  return [Math.round(clamp(l,-1,1)*cap), Math.round(clamp(r,-1,1)*cap)];
 }
+function paint(el,v){ el.style.width=Math.abs(v)/2+"%"; el.style.left = v>=0 ? "50%" : (50-Math.abs(v)/2)+"%"; el.style.background = v>=0 ? "var(--cyan)" : "var(--pink)"; }
 
-const l2Fill = document.getElementById('l2Fill'), l2Txt = document.getElementById('l2Txt');
-const r2Fill = document.getElementById('r2Fill'), r2Txt = document.getElementById('r2Txt');
-
-function sampleControls() {
-  const cap = parseInt(speed.value, 10);
-
-  // Read Physical Gamepad if connected
-  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-  const gp  = gps[0] || gps[1] || gps[2] || gps[3];
-  let gpR2 = 0, gpL2 = 0, gpSteer = 0, gpEBrake = false;
-  let gpDpU = false, gpDpD = false, gpDpL = false, gpDpR = false;
-
-  if (gp) {
-    gpStat.textContent = "Active";
-    gpStat.classList.add('on');
-    gpR2 = gp.buttons[7]?.value || 0;
-    gpL2 = gp.buttons[6]?.value || 0;
-    gpSteer = deadzone(gp.axes[0] || 0);
-    gpEBrake = !!(gp.buttons[0]?.pressed || gp.buttons[1]?.pressed || gp.buttons[2]?.pressed || gp.buttons[3]?.pressed);
-    gpDpU = !!gp.buttons[12]?.pressed;
-    gpDpD = !!gp.buttons[13]?.pressed;
-    gpDpL = !!gp.buttons[14]?.pressed;
-    gpDpR = !!gp.buttons[15]?.pressed;
-  } else {
-    gpStat.textContent = "None";
-    gpStat.classList.remove('on');
-  }
-
-  // Merge Touch + Keyboard + Physical Gamepad
-  const kbF = keys.has('w') || keys.has('arrowup');
-  const kbB = keys.has('s') || keys.has('arrowdown');
-  const kbL = keys.has('a') || keys.has('arrowleft');
-  const kbR = keys.has('d') || keys.has('arrowright');
-
-  let r2 = Math.max(touchR2, gpR2, (dpadHeld.has('U') || gpDpU || kbF) ? 1.0 : 0);
-  let l2 = Math.max(touchL2, gpL2, (dpadHeld.has('D') || gpDpD || kbB) ? 1.0 : 0);
-
-  let steer = stickActive ? touchSteer : gpSteer;
-  if (dpadHeld.has('L') || gpDpL || kbL) steer = -1.0;
-  if (dpadHeld.has('R') || gpDpR || kbR) steer =  1.0;
-
-  const eBrake = touchEBrake || gpEBrake || keys.has(' ');
-
-  // Animate On-Screen Gamepad UI (mirrors both Touch & Physical Shooter III)
-  stickKnob.style.transform = `translate(${steer * MAX_RAD}px, ${(stickActive ? touchSteerY : 0) * MAX_RAD}px)`;
-  r2Fill.style.height = Math.round(r2 * 100) + '%';
-  r2Txt.textContent   = Math.round(r2 * 100) + '%';
-  l2Fill.style.height = Math.round(l2 * 100) + '%';
-  l2Txt.textContent   = Math.round(l2 * 100) + '%';
-
-  if (eBrake) return [0, 0];
-
-  const throttle = r2 - l2;
-  let l = 0, r = 0;
-
-  if (Math.abs(throttle) < 0.02) {
-    // Zero throttle + Left Stick Left/Right = Spin in place on axis
-    l = steer;
-    r = -steer;
-  } else {
-    // Moving + Steering = Sharp Forza differential cornering
-    l = throttle * (steer > 0 ? 1.0 : 1.0 + steer * TURN_SHARPNESS);
-    r = throttle * (steer < 0 ? 1.0 : 1.0 - steer * TURN_SHARPNESS);
-  }
-
-  const lPct = Math.round(Math.max(-1, Math.min(1, l)) * cap);
-  const rPct = Math.round(Math.max(-1, Math.min(1, r)) * cap);
-  return [lPct, rPct];
-}
-
-// 40 Hz (25 ms) zero-ACK BLE loop
-setInterval(async () => {
-  const [l, r] = sampleControls();
-  lVal.textContent = l + '%';
-  rVal.textContent = r + '%';
-
-  if (!bleChar || busy) return;
+/* send on change + 100 ms heartbeat */
+async function send(p, force){
+  if (!bleChar || (busy && !force)) return;
   busy = true;
-  try {
-    const packet = new Int8Array([l, r]);
-    if (bleChar.writeValueWithoutResponse) {
-      await bleChar.writeValueWithoutResponse(packet);
-    } else {
-      await bleChar.writeValue(packet);
-    }
-  } catch (e) {}
+  try { const pkt = new Int8Array(p); await (bleChar.writeValueWithoutResponse ? bleChar.writeValueWithoutResponse(pkt) : bleChar.writeValue(pkt)); lastSent=p.join(","); lastSentAt=performance.now(); } catch(_){}
   busy = false;
+}
+setInterval(() => {
+  const p = sample();
+  $("lVal").textContent = p[0]+"%"; $("rVal").textContent = p[1]+"%"; paint($("lBar"),p[0]); paint($("rBar"),p[1]);
+  if (p.join(",")!==lastSent || performance.now()-lastSentAt>100) send(p);
 }, 25);
 </script>
 </body>
