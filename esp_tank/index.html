@@ -3,139 +3,250 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Forza + Manual BLE Tank</title>
+<title>ESP32 Forza Gamepad UI</title>
 <style>
   :root{
-    --bg1:#0f172a; --bg2:#1e293b; --card:#111a2e; --edge:#2b3a55;
+    --bg1:#0b1120; --bg2:#1e293b; --card:#131c31; --edge:#2b3a55;
     --text:#e2e8f0; --muted:#94a3b8; --accent:#22d3ee; --accent2:#818cf8;
-    --stop:#ef4444; --ok:#22c55e;
+    --stop:#ef4444; --ok:#22c55e; --warn:#f59e0b;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
-  html,body{margin:0;min-height:100%}
-  body{
-    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    color:var(--text);
-    background:radial-gradient(circle at 20% 0%,var(--bg2),var(--bg1) 60%);
-    display:flex;align-items:center;justify-content:center;
-    touch-action:none;padding:14px;
+  html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 0%,var(--bg2),var(--bg1) 70%);color:var(--text);font-family:system-ui,-apple-system,sans-serif;touch-action:none}
+
+  .gamepad-shell{
+    width:100%;height:100%;max-width:960px;margin:0 auto;padding:12px;
+    display:grid;
+    grid-template-columns:1fr 1.15fr 1fr;
+    grid-template-rows:auto 1fr;
+    gap:12px;align-items:center;
   }
-  .app{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px}
-  .card{
+
+  /* Portrait adaptation */
+  @media (max-width: 680px) and (orientation: portrait) {
+    .gamepad-shell{
+      grid-template-columns:1fr 1fr;
+      grid-template-rows:auto auto 1fr;
+      overflow-y:auto;
+    }
+    .hud-center{grid-column:1 / -1;order:1}
+    .left-wing{order:2}
+    .right-wing{order:3}
+  }
+
+  .panel{
     background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,0));
-    background-color:var(--card);
-    border:1px solid var(--edge);border-radius:22px;padding:16px;
-    box-shadow:0 10px 30px rgba(0,0,0,.35);
+    background-color:var(--card);border:1px solid var(--edge);border-radius:24px;
+    padding:14px;box-shadow:0 10px 28px rgba(0,0,0,.45);
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    height:100%;
   }
-  .top-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-  h1{font-size:1.15rem;margin:0;letter-spacing:.5px}
+
+  /* Center HUD */
+  .hud-center{justify-content:center;gap:10px}
+  .top-bar{width:100%;display:flex;justify-content:space-between;align-items:center}
+  h1{font-size:1.05rem;margin:0;letter-spacing:.6px}
   h1 span{color:var(--accent)}
   .bt-btn{
-    width:100%;padding:12px;border-radius:12px;border:none;
-    font-size:.95rem;font-weight:700;background:var(--accent);color:#06121f;cursor:pointer;
+    width:100%;padding:11px;border-radius:12px;border:none;
+    font-size:.9rem;font-weight:700;background:var(--accent);color:#06121f;cursor:pointer;
   }
-  .status-row{display:flex;justify-content:space-between;margin-top:10px;font-size:.8rem;color:var(--muted)}
-  .badge{padding:3px 9px;border-radius:99px;font-size:.75rem;font-weight:700;background:#1e293b;color:var(--muted)}
+  .badges{width:100%;display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)}
+  .badge{padding:2px 8px;border-radius:99px;font-weight:700;background:#1e293b;color:var(--muted)}
   .badge.on{background:var(--ok);color:#052e16}
 
-  /* 9-Button Manual Touch Pad */
-  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .btn{
-    aspect-ratio:1/1;border:1px solid var(--edge);border-radius:18px;
-    background:linear-gradient(180deg,#1b2742,#141d33);
-    color:var(--text);font-size:1.8rem;display:flex;align-items:center;justify-content:center;
-    cursor:pointer;transition:transform .08s,box-shadow .15s,background .15s;
-    box-shadow:0 5px 0 #0a1020,0 8px 14px rgba(0,0,0,.35);
-  }
-  .btn svg{width:42%;height:42%;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
-  .btn.active{
-    transform:translateY(4px);
-    background:linear-gradient(180deg,var(--accent2),var(--accent));
-    color:#06121f;box-shadow:0 1px 0 #0a1020,0 0 22px rgba(34,211,238,.55);
-  }
-  .btn.stop{color:#fff;background:linear-gradient(180deg,#f87171,var(--stop));border-color:#7f1d1d}
-  .btn.stop.active{box-shadow:0 1px 0 #7f1d1d,0 0 22px rgba(239,68,68,.6)}
-  .btn.stop svg{fill:currentColor;stroke:none}
+  .telem{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center}
+  .t-box{background:#090f1d;border:1px solid var(--edge);border-radius:12px;padding:8px}
+  .t-box small{display:block;font-size:.65rem;color:var(--muted);text-transform:uppercase}
+  .t-box b{font-size:1.25rem;color:var(--accent)}
 
-  .speed-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-  .speed-head b{font-size:1.4rem;color:var(--accent)}
-  .speed-head small{color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-size:.7rem}
+  .slider-wrap{width:100%}
+  .slider-head{display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:4px;color:var(--muted)}
+  .slider-head b{color:var(--accent)}
   input[type=range]{
-    -webkit-appearance:none;appearance:none;width:100%;height:12px;border-radius:99px;outline:none;
-    background:linear-gradient(90deg,var(--accent2),var(--accent)) 0/var(--fill,80%) 100% no-repeat,#0b1324;
+    -webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:99px;outline:none;
+    background:linear-gradient(90deg,var(--accent2),var(--accent)) 0/var(--fill,80%) 100% no-repeat,#090f1d;
     border:1px solid var(--edge);
   }
   input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;width:28px;height:28px;border-radius:50%;
-    background:#fff;border:4px solid var(--accent);box-shadow:0 2px 10px rgba(0,0,0,.5);
+    -webkit-appearance:none;width:24px;height:24px;border-radius:50%;
+    background:#fff;border:3px solid var(--accent);
   }
-  .bars{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;text-align:center}
-  .bar-box{background:#0b1324;border:1px solid var(--edge);padding:8px;border-radius:12px;font-size:1.1rem;font-weight:700;color:var(--accent)}
-  .hint{text-align:center;font-size:.72rem;color:var(--muted);line-height:1.4}
+
+  /* Left Wing: Virtual Stick + D-Pad */
+  .stick-zone{
+    position:relative;width:150px;height:150px;border-radius:50%;
+    background:radial-gradient(circle,#1e293b 0%,#090f1d 75%);
+    border:2px solid var(--edge);box-shadow:inset 0 4px 14px rgba(0,0,0,.7);
+    display:flex;align-items:center;justify-content:center;touch-action:none;
+  }
+  .stick-cross{
+    position:absolute;width:80%;height:2px;background:rgba(148,163,184,.18);pointer-events:none;
+  }
+  .stick-knob{
+    position:absolute;width:64px;height:64px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#38bdf8,#0284c7);
+    border:3px solid #bae6fd;box-shadow:0 6px 16px rgba(0,0,0,.6);
+    transform:translate(0px,0px);pointer-events:none;transition:background .15s;
+  }
+  .stick-zone.active .stick-knob{background:radial-gradient(circle at 35% 30%,#a5f3fc,#22d3ee);box-shadow:0 0 20px rgba(34,211,238,.6)}
+
+  /* D-Pad */
+  .dpad{
+    display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:4px;
+  }
+  .d-btn{
+    background:#19253d;border:1px solid var(--edge);border-radius:10px;
+    color:var(--text);display:flex;align-items:center;justify-content:center;
+    font-size:1rem;font-weight:700;box-shadow:0 3px 0 #090f1d;
+  }
+  .d-btn.active{background:var(--accent);color:#06121f;transform:translateY(2px);box-shadow:0 1px 0 #090f1d}
+
+  /* Right Wing: Analog L2/R2 Pedals + ABXY */
+  .triggers{
+    width:100%;display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;max-height:175px;
+  }
+  .trig-pad{
+    position:relative;background:#090f1d;border:2px solid var(--edge);border-radius:18px;
+    overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;
+    padding:10px;align-items:center;touch-action:none;cursor:pointer;
+  }
+  .trig-fill{
+    position:absolute;bottom:0;left:0;right:0;height:0%;
+    transition:height .04s linear;pointer-events:none;
+  }
+  .trig-pad.l2 .trig-fill{background:linear-gradient(0deg,rgba(239,68,68,.35),rgba(239,68,68,.85))}
+  .trig-pad.r2 .trig-fill{background:linear-gradient(0deg,rgba(34,211,238,.3),rgba(34,211,238,.85))}
+  .trig-pad span,.trig-pad b{position:relative;z-index:1;pointer-events:none}
+  .trig-pad span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+  .trig-pad b{font-size:1.15rem}
+
+  /* ABXY Diamond */
+  .abxy{
+    display:grid;grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:4px;
+    margin-top:8px;
+  }
+  .f-btn{
+    border-radius:50%;border:1px solid var(--edge);background:#19253d;
+    color:var(--text);font-weight:800;font-size:.85rem;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 0 #090f1d;cursor:pointer;
+  }
+  .f-btn.b-a{border-color:#22c55e;color:#4ade80}
+  .f-btn.b-b{border-color:#ef4444;color:#f87171}
+  .f-btn.b-x{border-color:#38bdf8;color:#7dd3fc}
+  .f-btn.b-y{border-color:#eab308;color:#fde047}
+  .f-btn.active{transform:translateY(3px);background:var(--stop);color:#fff;box-shadow:0 1px 0 #090f1d}
+
+  .sub-label{font-size:.7rem;color:var(--muted);text-align:center;margin-top:4px}
 </style>
 </head>
 <body>
-<div class="app">
 
-  <div class="card">
-    <div class="top-head">
-      <h1>ESP32 <span>BLE TANK</span></h1>
+<div class="gamepad-shell">
+
+  <!-- LEFT SIDE: Steering Stick + D-Pad -->
+  <div class="panel left-wing">
+    <div class="sub-label"><b>LEFT STICK</b> &middot; Steer / Axis Spin</div>
+    <div class="stick-zone" id="stickZone">
+      <div class="stick-cross"></div>
+      <div class="stick-knob" id="stickKnob"></div>
     </div>
+
+    <div class="dpad">
+      <div></div>
+      <div class="d-btn" data-dp="U">&#9650;</div>
+      <div></div>
+      <div class="d-btn" data-dp="L">&#9664;</div>
+      <div></div>
+      <div class="d-btn" data-dp="R">&#9654;</div>
+      <div></div>
+      <div class="d-btn" data-dp="D">&#9660;</div>
+      <div></div>
+    </div>
+    <div class="sub-label">D-Pad Digital Override</div>
+  </div>
+
+  <!-- CENTER HUD: BLE Connect, Speed Cap, Telemetry -->
+  <div class="panel hud-center">
+    <div class="top-bar">
+      <h1>FORZA <span>TANK PAD</span></h1>
+    </div>
+
     <button class="bt-btn" id="btBtn">Connect Bluetooth Tank</button>
-    <div class="status-row">
-      <span>Bluetooth: <b class="badge" id="btStat">Offline</b></span>
-      <span>Gamepad: <b class="badge" id="gpStat">None</b></span>
+
+    <div class="badges">
+      <span>BLE: <b class="badge" id="btStat">Offline</b></span>
+      <span>Shooter III: <b class="badge" id="gpStat">None</b></span>
+    </div>
+
+    <div class="telem">
+      <div class="t-box"><small>Left Track</small><b id="lVal">0%</b></div>
+      <div class="t-box"><small>Right Track</small><b id="rVal">0%</b></div>
+    </div>
+
+    <div class="slider-wrap">
+      <div class="slider-head"><span>MAX POWER LIMIT</span><b id="sv">80%</b></div>
+      <input type="range" id="speed" min="20" max="100" value="80">
+    </div>
+
+    <div class="sub-label">
+      Hold/Slide <b>R2</b> (Gas) or <b>L2</b> (Brake/Rev) + Drag <b>Left Stick</b> to steer.<br>
+      Keyboard: W A S D / Arrows &middot; Space or A/B/X/Y = E-Brake
     </div>
   </div>
 
-  <!-- Manual Touch Pad -->
-  <div class="card">
-    <div class="pad" id="pad">
-      <div class="btn" data-d="FL"><svg viewBox="0 0 24 24" style="transform:rotate(-45deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-      <div class="btn" data-d="F"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-      <div class="btn" data-d="FR"><svg viewBox="0 0 24 24" style="transform:rotate(45deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-
-      <div class="btn" data-d="L"><svg viewBox="0 0 24 24" style="transform:rotate(-90deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-      <div class="btn stop" data-d="S"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></div>
-      <div class="btn" data-d="R"><svg viewBox="0 0 24 24" style="transform:rotate(90deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-
-      <div class="btn" data-d="BL"><svg viewBox="0 0 24 24" style="transform:rotate(-135deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-      <div class="btn" data-d="B"><svg viewBox="0 0 24 24" style="transform:rotate(180deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-      <div class="btn" data-d="BR"><svg viewBox="0 0 24 24" style="transform:rotate(135deg)"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+  <!-- RIGHT SIDE: Analog L2/R2 Triggers + ABXY -->
+  <div class="panel right-wing">
+    <div class="sub-label"><b>ANALOG TRIGGERS</b> (Slide Up = More Power)</div>
+    <div class="triggers">
+      <div class="trig-pad l2" id="l2Pad">
+        <div class="trig-fill" id="l2Fill"></div>
+        <span>L2 Brake/Rev</span>
+        <b id="l2Txt">0%</b>
+      </div>
+      <div class="trig-pad r2" id="r2Pad">
+        <div class="trig-fill" id="r2Fill"></div>
+        <span>R2 Throttle</span>
+        <b id="r2Txt">0%</b>
+      </div>
     </div>
-  </div>
 
-  <!-- Speed Slider & Live Motor Output -->
-  <div class="card">
-    <div class="speed-head"><small>Max Speed / Manual Speed</small><b id="sv">80%</b></div>
-    <input type="range" id="speed" min="20" max="100" value="80">
-    <div class="bars">
-      <div class="bar-box">L: <span id="lVal">0</span>%</div>
-      <div class="bar-box">R: <span id="rVal">0</span>%</div>
+    <div class="abxy">
+      <div></div>
+      <div class="f-btn b-y" data-eb="Y">Y</div>
+      <div></div>
+      <div class="f-btn b-x" data-eb="X">X</div>
+      <div></div>
+      <div class="f-btn b-b" data-eb="B">B</div>
+      <div></div>
+      <div class="f-btn b-a" data-eb="A">A</div>
+      <div></div>
     </div>
+    <div class="sub-label">A / B / X / Y = Emergency Brake</div>
   </div>
 
-  <div class="hint">
-    <b>Forza Gamepad:</b> R2 = Gas &middot; L2 = Brake/Rev &middot; L-Stick = Sharp Steer / Axis Spin<br>
-    <b>Manual:</b> Hold On-Screen Pad or W A S D / Arrow Keys (Space = Stop)
-  </div>
 </div>
 
 <script>
 const SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
 const CHAR_UUID    = "19b10001-e8f2-537e-4f6c-d104768a1214";
 
-// Higher = sharper cornering while moving (1.15 stops inside belt at 87% stick and slightly reverses at 100%)
+// Sharp cornering factor when moving + steering (1.15 locks inside belt at ~87% stick and counter-rotates at 100%)
 const TURN_SHARPNESS = 1.15;
 
-// Manual diagonal inside-track ratio (0.0 locks inside belt completely for a sharp pivot turn)
-const MANUAL_CURVE_RATIO = 0.0;
-
-let bleChar = null, busy = false, manualDir = 'S';
-const btBtn = document.getElementById('btBtn');
+let bleChar = null, busy = false;
+const btBtn  = document.getElementById('btBtn');
 const btStat = document.getElementById('btStat');
 const gpStat = document.getElementById('gpStat');
-const speed = document.getElementById('speed'), sv = document.getElementById('sv');
-const lVal = document.getElementById('lVal'), rVal = document.getElementById('rVal');
+const speed  = document.getElementById('speed'), sv = document.getElementById('sv');
+const lVal   = document.getElementById('lVal'),  rVal = document.getElementById('rVal');
+
+// On-screen touch state
+let touchSteer = 0, touchSteerY = 0, stickActive = false;
+let touchR2 = 0, touchL2 = 0;
+let touchEBrake = false;
+const dpadHeld = new Set();
+const keys = new Set();
 
 function fillSlider() {
   speed.style.setProperty('--fill', speed.value + '%');
@@ -166,105 +277,177 @@ btBtn.onclick = async () => {
   }
 };
 
-// ---------- Manual Touch Pad & Keyboard ----------
-function setManualDir(d) {
-  manualDir = d;
-  document.querySelectorAll('.btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.d === d && d !== 'S')
-  );
+// ---------- Virtual Left Analog Stick ----------
+const stickZone = document.getElementById('stickZone');
+const stickKnob = document.getElementById('stickKnob');
+const MAX_RAD   = 44;
+
+function updateStickFromPointer(e) {
+  const rect = stickZone.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  let dx = e.clientX - cx;
+  let dy = e.clientY - cy;
+  const dist = Math.hypot(dx, dy);
+  if (dist > MAX_RAD) {
+    dx = (dx / dist) * MAX_RAD;
+    dy = (dy / dist) * MAX_RAD;
+  }
+  touchSteer  = Math.max(-1, Math.min(1, dx / MAX_RAD));
+  touchSteerY = Math.max(-1, Math.min(1, dy / MAX_RAD));
 }
 
-document.querySelectorAll('.btn').forEach(b => {
-  const d = b.dataset.d;
-  b.addEventListener('pointerdown', e => {
+stickZone.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  stickZone.setPointerCapture(e.pointerId);
+  stickActive = true;
+  stickZone.classList.add('active');
+  updateStickFromPointer(e);
+});
+stickZone.addEventListener('pointermove', e => {
+  if (!stickActive) return;
+  updateStickFromPointer(e);
+});
+['pointerup','pointercancel'].forEach(ev =>
+  stickZone.addEventListener(ev, () => {
+    stickActive = false;
+    touchSteer = 0;
+    touchSteerY = 0;
+    stickZone.classList.remove('active');
+  })
+);
+
+// ---------- Virtual Analog Triggers (L2 & R2) ----------
+function bindTriggerPad(padEl, setFn) {
+  let active = false;
+  function calcVal(e) {
+    const rect = padEl.getBoundingClientRect();
+    // Bottom of pad = 0.25, Top of pad = 1.0 (so even tapping bottom gives gentle movement)
+    const rel = 1 - ((e.clientY - rect.top) / rect.height);
+    const val = Math.max(0.2, Math.min(1.0, rel));
+    setFn(val);
+  }
+  padEl.addEventListener('pointerdown', e => {
     e.preventDefault();
-    b.setPointerCapture(e.pointerId);
-    setManualDir(d);
+    padEl.setPointerCapture(e.pointerId);
+    active = true;
+    calcVal(e);
   });
-  ['pointerup','pointercancel','pointerleave'].forEach(ev =>
-    b.addEventListener(ev, () => { if (d !== 'S' && manualDir === d) setManualDir('S'); })
+  padEl.addEventListener('pointermove', e => {
+    if (active) calcVal(e);
+  });
+  ['pointerup','pointercancel'].forEach(ev =>
+    padEl.addEventListener(ev, () => { active = false; setFn(0); })
+  );
+}
+bindTriggerPad(document.getElementById('r2Pad'), v => { touchR2 = v; });
+bindTriggerPad(document.getElementById('l2Pad'), v => { touchL2 = v; });
+
+// ---------- Virtual D-Pad & Face Buttons ----------
+document.querySelectorAll('.d-btn').forEach(btn => {
+  const dir = btn.dataset.dp;
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    btn.setPointerCapture(e.pointerId);
+    dpadHeld.add(dir);
+    btn.classList.add('active');
+  });
+  ['pointerup','pointercancel'].forEach(ev =>
+    btn.addEventListener(ev, () => {
+      dpadHeld.delete(dir);
+      btn.classList.remove('active');
+    })
   );
 });
 
-const keys = new Set();
-function dirFromKeys() {
-  const f = keys.has('w') || keys.has('arrowup'), bk = keys.has('s') || keys.has('arrowdown');
-  const l = keys.has('a') || keys.has('arrowleft'), r = keys.has('d') || keys.has('arrowright');
-  if (f && l) return 'FL'; if (f && r) return 'FR';
-  if (bk && l) return 'BL'; if (bk && r) return 'BR';
-  if (f) return 'F'; if (bk) return 'B'; if (l) return 'L'; if (r) return 'R';
-  return 'S';
-}
+document.querySelectorAll('.f-btn').forEach(btn => {
+  btn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    btn.setPointerCapture(e.pointerId);
+    touchEBrake = true;
+    btn.classList.add('active');
+  });
+  ['pointerup','pointercancel'].forEach(ev =>
+    btn.addEventListener(ev, () => {
+      touchEBrake = false;
+      btn.classList.remove('active');
+    })
+  );
+});
+
+// ---------- Keyboard Support ----------
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (k === ' ') { keys.clear(); setManualDir('S'); return; }
-  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) {
-    e.preventDefault(); keys.add(k); setManualDir(dirFromKeys());
+  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) {
+    e.preventDefault();
+    keys.add(k);
   }
 });
-addEventListener('keyup', e => { keys.delete(e.key.toLowerCase()); setManualDir(dirFromKeys()); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) setManualDir('S'); });
-addEventListener('blur', () => setManualDir('S'));
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => {
+  keys.clear(); dpadHeld.clear();
+  touchR2 = 0; touchL2 = 0; touchSteer = 0; touchSteerY = 0; touchEBrake = false;
+});
 
-function getManualTracks(d, cap) {
-  let l = 0, r = 0;
-  if      (d === 'F')  { l =  1;                   r =  1; }
-  else if (d === 'B')  { l = -1;                   r = -1; }
-  else if (d === 'L')  { l = -1;                   r =  1; }
-  else if (d === 'R')  { l =  1;                   r = -1; }
-  else if (d === 'FL') { l =  MANUAL_CURVE_RATIO;  r =  1; }
-  else if (d === 'FR') { l =  1;                   r =  MANUAL_CURVE_RATIO; }
-  else if (d === 'BL') { l = -MANUAL_CURVE_RATIO;  r = -1; }
-  else if (d === 'BR') { l = -1;                   r = -MANUAL_CURVE_RATIO; }
-  return [Math.round(l * cap), Math.round(r * cap)];
-}
-
-// ---------- Forza Horizon Gamepad Reader ----------
+// ---------- Combined Forza Input & Visual Sync ----------
 function deadzone(v, dz = 0.12) {
   if (Math.abs(v) < dz) return 0;
   return (v - Math.sign(v) * dz) / (1 - dz);
 }
 
-function getControlOutput() {
+const l2Fill = document.getElementById('l2Fill'), l2Txt = document.getElementById('l2Txt');
+const r2Fill = document.getElementById('r2Fill'), r2Txt = document.getElementById('r2Txt');
+
+function sampleControls() {
   const cap = parseInt(speed.value, 10);
 
-  // 1. If manual touch pad or keyboard is actively held, prioritize it
-  if (manualDir !== 'S') {
-    return getManualTracks(manualDir, cap);
-  }
-
-  // 2. Otherwise read Fantech Shooter III Gamepad
+  // Read Physical Gamepad if connected
   const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-  const gp = gps[0] || gps[1] || gps[2] || gps[3];
-  if (!gp) {
+  const gp  = gps[0] || gps[1] || gps[2] || gps[3];
+  let gpR2 = 0, gpL2 = 0, gpSteer = 0, gpEBrake = false;
+  let gpDpU = false, gpDpD = false, gpDpL = false, gpDpR = false;
+
+  if (gp) {
+    gpStat.textContent = "Active";
+    gpStat.classList.add('on');
+    gpR2 = gp.buttons[7]?.value || 0;
+    gpL2 = gp.buttons[6]?.value || 0;
+    gpSteer = deadzone(gp.axes[0] || 0);
+    gpEBrake = !!(gp.buttons[0]?.pressed || gp.buttons[1]?.pressed || gp.buttons[2]?.pressed || gp.buttons[3]?.pressed);
+    gpDpU = !!gp.buttons[12]?.pressed;
+    gpDpD = !!gp.buttons[13]?.pressed;
+    gpDpL = !!gp.buttons[14]?.pressed;
+    gpDpR = !!gp.buttons[15]?.pressed;
+  } else {
     gpStat.textContent = "None";
     gpStat.classList.remove('on');
-    return [0, 0];
-  }
-  gpStat.textContent = "Active";
-  gpStat.classList.add('on');
-
-  // Face buttons A / B / X / Y = immediate brake/stop
-  if (gp.buttons[0]?.pressed || gp.buttons[1]?.pressed || gp.buttons[2]?.pressed || gp.buttons[3]?.pressed) {
-    return [0, 0];
   }
 
-  // Forza triggers: R2 (button 7) = Forward gas, L2 (button 6) = Brake/Reverse
-  const r2 = gp.buttons[7]?.value || 0;
-  const l2 = gp.buttons[6]?.value || 0;
-  let throttle = r2 - l2;
+  // Merge Touch + Keyboard + Physical Gamepad
+  const kbF = keys.has('w') || keys.has('arrowup');
+  const kbB = keys.has('s') || keys.has('arrowdown');
+  const kbL = keys.has('a') || keys.has('arrowleft');
+  const kbR = keys.has('d') || keys.has('arrowright');
 
-  // Allow D-Pad Up/Down as fallback throttle if triggers aren't held
-  if (Math.abs(throttle) < 0.02) {
-    if (gp.buttons[12]?.pressed) throttle = 1.0;
-    else if (gp.buttons[13]?.pressed) throttle = -1.0;
-  }
+  let r2 = Math.max(touchR2, gpR2, (dpadHeld.has('U') || gpDpU || kbF) ? 1.0 : 0);
+  let l2 = Math.max(touchL2, gpL2, (dpadHeld.has('D') || gpDpD || kbB) ? 1.0 : 0);
 
-  // Steering: Left Stick X-axis (axis 0) or D-Pad Left/Right
-  let steer = deadzone(gp.axes[0] || 0);
-  if (gp.buttons[14]?.pressed) steer = -1.0;
-  if (gp.buttons[15]?.pressed) steer =  1.0;
+  let steer = stickActive ? touchSteer : gpSteer;
+  if (dpadHeld.has('L') || gpDpL || kbL) steer = -1.0;
+  if (dpadHeld.has('R') || gpDpR || kbR) steer =  1.0;
 
+  const eBrake = touchEBrake || gpEBrake || keys.has(' ');
+
+  // Animate On-Screen Gamepad UI (mirrors both Touch & Physical Shooter III)
+  stickKnob.style.transform = `translate(${steer * MAX_RAD}px, ${(stickActive ? touchSteerY : 0) * MAX_RAD}px)`;
+  r2Fill.style.height = Math.round(r2 * 100) + '%';
+  r2Txt.textContent   = Math.round(r2 * 100) + '%';
+  l2Fill.style.height = Math.round(l2 * 100) + '%';
+  l2Txt.textContent   = Math.round(l2 * 100) + '%';
+
+  if (eBrake) return [0, 0];
+
+  const throttle = r2 - l2;
   let l = 0, r = 0;
 
   if (Math.abs(throttle) < 0.02) {
@@ -272,7 +455,7 @@ function getControlOutput() {
     l = steer;
     r = -steer;
   } else {
-    // Moving + Steering = Sharp differential cornering
+    // Moving + Steering = Sharp Forza differential cornering
     l = throttle * (steer > 0 ? 1.0 : 1.0 + steer * TURN_SHARPNESS);
     r = throttle * (steer < 0 ? 1.0 : 1.0 - steer * TURN_SHARPNESS);
   }
@@ -284,9 +467,9 @@ function getControlOutput() {
 
 // 40 Hz (25 ms) zero-ACK BLE loop
 setInterval(async () => {
-  const [l, r] = getControlOutput();
-  lVal.textContent = l;
-  rVal.textContent = r;
+  const [l, r] = sampleControls();
+  lVal.textContent = l + '%';
+  rVal.textContent = r + '%';
 
   if (!bleChar || busy) return;
   busy = true;
